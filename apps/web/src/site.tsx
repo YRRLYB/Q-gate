@@ -6,7 +6,8 @@ const defaultSiteSettings: SiteSettings = {
   brand: {
     name: "Q-gate",
     systemText: "COMMUNITY ACCESS SYSTEM",
-    adminName: "Q-gate Studio"
+    adminName: "Q-gate Studio",
+    repoUrl: "https://github.com/YRRLYB/Q-gate"
   },
   media: {
     homeHeroImage: "https://photo.yrrlyb.top/api.php?sort=pc",
@@ -81,7 +82,7 @@ const defaultSiteSettings: SiteSettings = {
     title: "Q-gate 出题与配置工作台",
     subtitle: "保持轻量、好看和可维护。题库与站点文案都能直接热更新。",
     loginTitle: "管理员登录",
-    loginSubtitle: "使用管理员密码登录，浏览器可以记住密码；登录成功后工作台会建立轻量会话，不用每次重复输入。",
+    loginSubtitle: "使用管理员密码登录。浏览器可以记住密码，但每次重新进入管理端时仍需要再次验证。",
     loginButton: "进入工作台",
     logoutButton: "退出登录",
     siteSettingsTitle: "站点文案",

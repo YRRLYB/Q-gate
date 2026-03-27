@@ -14,7 +14,8 @@ export const siteSettingsSchema = z.object({
   brand: z.object({
     name: z.string().min(1).max(40),
     systemText: z.string().min(1).max(80),
-    adminName: z.string().min(1).max(60)
+    adminName: z.string().min(1).max(60),
+    repoUrl: z.string().min(1).max(1000)
   }),
   media: z.object({
     homeHeroImage: mediaUrlSchema,

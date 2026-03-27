@@ -87,6 +87,7 @@ export type SiteSettings = {
     name: string;
     systemText: string;
     adminName: string;
+    repoUrl: string;
   };
   media: {
     homeHeroImage: string;

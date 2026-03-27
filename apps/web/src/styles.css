@@ -357,6 +357,24 @@ a {
   font-size: 1.1rem;
 }
 
+.topnav-link {
+  gap: 8px;
+  padding: 0 14px;
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.topnav-link span:last-child {
+  transform: translateY(-1px);
+}
+
+.topnav-github {
+  min-width: auto;
+  color: var(--accent-strong);
+}
+
 .theme-switch {
   display: inline-flex;
   gap: 8px;
@@ -1839,6 +1857,22 @@ a {
 
 .theme-toggle {
   color: var(--accent-strong);
+}
+
+.topnav-link {
+  min-height: 44px;
+}
+
+@media (max-width: 680px) {
+  .topnav-link {
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+  }
+
+  .topnav-link span:last-child {
+    display: none;
+  }
 }
 
 .theme-toggle span {

@@ -2,6 +2,7 @@ brand:
   name: Q-gate
   systemText: COMMUNITY ACCESS SYSTEM
   adminName: Q-gate Studio
+  repoUrl: https://github.com/YRRLYB/Q-gate
 
 media:
   homeHeroImage: https://photo.yrrlyb.top/api.php?sort=pc

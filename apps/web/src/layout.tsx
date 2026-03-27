@@ -95,6 +95,17 @@ function ShellHeader({ showNav = true }: { showNav?: boolean }) {
               <span className="theme-toggle-core" aria-hidden="true">{themeIcon}</span>
               <span className="theme-toggle-wave" aria-hidden="true" />
             </button>
+            <a
+              href={settings.brand.repoUrl}
+              className="icon-button topnav-link topnav-github"
+              title="打开 GitHub 仓库"
+              aria-label="打开 GitHub 仓库"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span aria-hidden="true">↗</span>
+              <span>GitHub</span>
+            </a>
           </div>
         </div>
       </header>
@@ -174,5 +185,3 @@ export function LoadingStage({ label, hint }: { label: string; hint: string }) {
     </div>
   );
 }
-
-
