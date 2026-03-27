@@ -1,0 +1,126 @@
+meta:
+  slug: mc-whitelist
+  title: Aurora Access Exam
+  subtitle: 新人准入测验
+  description: 面向 Minecraft 服务器与社区审核的基础答题体验。
+  passScore: 70
+  durationSec: 900
+  shuffleQuestions: true
+  examMode: closed_book
+  requireFullscreen: true
+  selectionMode: random
+  drawCount: 5
+  drawSingleCount: 3
+  drawMultipleCount: 1
+questions:
+  - id: rule_01
+    type: single
+    group: objective
+    points: 15
+    prompt: 在主城展示建筑区域，哪种行为最不合规？
+    description: 基础服规识别题。
+    options:
+      - key: A
+        text: 使用领地插件圈地后再施工
+      - key: B
+        text: 先阅读建筑区告示牌
+      - key: C
+        text: 未经说明直接爆破旧建筑
+      - key: D
+        text: 在公共仓库登记材料借用
+    answer:
+      - C
+  - id: rule_02
+    type: multiple
+    group: objective
+    points: 15
+    prompt: 以下哪些做法通常有助于通过社区审核？
+    description: 这是多选题，至少有两个正确答案。
+    options:
+      - key: A
+        text: 回答时使用清晰、完整的句子
+      - key: B
+        text: 随意复制别人的答案
+      - key: C
+        text: 如实填写自己的游戏名与联系方式
+      - key: D
+        text: 阅读服规后再作答
+    answer:
+      - A
+      - C
+      - D
+  - id: rule_03
+    type: text
+    group: subjective
+    points: 14
+    prompt: 如果你和其他玩家发生争议，你会如何处理？
+    description: 关键词命中会被视为通过。
+    placeholder: 20 到 120 字，尽量明确写出你的处理思路。
+    inputStyle: essay
+    answer:
+      - A
+      - B
+      - C
+  - id: rule_04
+    type: single
+    group: objective
+    points: 14
+    prompt: 通过答题后拿到的短验证码，最终应填写到哪里？
+    options:
+      - key: A
+        text: 任意路过玩家的私聊窗口
+      - key: B
+        text: 进群申请问题或群审核流程
+      - key: C
+        text: 地图里的告示牌
+      - key: D
+        text: 服务器资源包设置页
+    answer:
+      - B
+  - id: rule_05
+    type: single
+    group: objective
+    points: 14
+    prompt: 看到下图这类规则提示时，更稳妥的做法是什么？
+    media:
+      type: image
+      url: https://photo.yrrlyb.top/api.php?sort=pc
+      caption: 示例图片题，可替换成服务器自己的规则截图。
+    options:
+      - key: A
+        text: 自己猜一个差不多的结论
+      - key: B
+        text: 查公告或询问管理员确认
+      - key: C
+        text: 先无视，出事再说
+      - key: D
+        text: 跟着别人乱做
+    answer:
+      - B
+  - id: rule_06
+    type: text
+    group: subjective
+    points: 14
+    prompt: 如果 bot 提示验证码与绑定信息不一致，你第一时间应该做什么？
+    placeholder: 用一句话说明。
+    inputStyle: short
+    answer:
+      - A
+      - B
+      - C
+  - id: rule_07
+    type: single
+    group: objective
+    points: 14
+    prompt: 1+1=?
+    options:
+      - key: A
+        text: "2"
+      - key: B
+        text: "3"
+      - key: C
+        text: "4"
+      - key: D
+        text: "5"
+    answer:
+      - A

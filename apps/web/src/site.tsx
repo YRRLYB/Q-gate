@@ -1,0 +1,137 @@
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { api } from "./api";
+import type { SiteSettings } from "./types";
+
+const defaultSiteSettings: SiteSettings = {
+  brand: {
+    name: "Q-gate",
+    systemText: "COMMUNITY ACCESS SYSTEM",
+    adminName: "Q-gate Studio"
+  },
+  media: {
+    homeHeroImage: "https://photo.yrrlyb.top/api.php?sort=pc",
+    homeInsetImage: "https://photo.yrrlyb.top/api.php?sort=pc",
+    entryHeroImage: "https://photo.yrrlyb.top/api.php?sort=mp"
+  },
+  home: {
+    eyebrow: "SERVER / GATE",
+    title: "Q-gate 准入入口",
+    subtitle: "先确认身份，再完成基础问答；通过后拿到短验证码，直接填写到进群申请问题里。",
+    loadingHint: "Q-gate 正在同步首页题集与图片资源。",
+    entryListTitle: "当前可用入口",
+    entryCardHint: "点这里进入答题入口",
+    flowSteps: ["确认身份", "完成问答", "填写验证码"],
+    highlights: [
+      { title: "申请可直用", body: "通过后直接领取短验证码。" },
+      { title: "归属更稳", body: "验证码会和 QQ、游戏名一起校验。" }
+    ],
+    metrics: ["点击下方入口卡片开始答题", "通过后领取短验证码", "适合直接填写进群申请问题"]
+  },
+  entry: {
+    eyebrow: "ENTRY / BIND",
+    fallbackTitle: "Q-gate 绑定入口",
+    fallbackSubtitle: "先确认 QQ 和 Minecraft 账号，信息无误后再开始答题。",
+    loadingHint: "Q-gate 正在准备绑定页图片与表单资源。",
+    bindingTitle: "确认归属后，再进入正式答题",
+    bindingExplain: "答题通过后的验证码会和 QQ、Minecraft 用户名一起绑定，用于进群申请校验。",
+    startButton: "确认绑定并开始答题",
+    flowSteps: ["确认账号", "绑定归属", "开始答题"],
+    warning: {
+      title: "填写前请注意",
+      body: "一个 QQ 号对应一个进群申请身份。答题通过后，验证码会和 QQ 号以及 Minecraft 用户名一起被 bot 校验。"
+    },
+    bindingNote: {
+      title: "绑定说明",
+      body: "Q-gate 会把这次答题结果与你填写的 QQ 和游戏名对应起来，用来判断进群申请里填写的验证码是不是你的。请务必填写真正要申请使用的账号。"
+    },
+    confirmAvatar: "我已确认当前 QQ 头像和号码，就是这次准备用于进群申请的账户。",
+    confirmPrivacy: "我已知晓本页填写的 QQ 与游戏名会用于绑定本次答题结果，并用于后续验证码归属校验。"
+  },
+  session: {
+    eyebrow: "SESSION / EXAM",
+    subtitle: "剩余时间会实时刷新，右侧可以快速跳题；如果题库要求全屏，Q-gate 会在进入前直接整屏拦截。",
+    loadingHint: "Q-gate 正在预加载题目里的图片、音频和视频资源。",
+    lostTitle: "当前会话不存在",
+    lostSubtitle: "浏览器里没有找到这次答题记录，请返回上一页重新开始。",
+    lostBackLabel: "返回重新绑定",
+    navTitle: "题号导航",
+    submitHint: "提交后会显示总分、错题、你的答案和参考正确答案。",
+    submitButton: "提交并判分",
+    fullscreenTitle: "当前题库要求全屏作答",
+    fullscreenBody: "未进入全屏前无法开始答题；中途切出页面或退出全屏时，系统会直接整屏警告并记录次数。",
+    fullscreenButton: "进入全屏开始作答",
+    resumeButton: "我已回到安全状态，继续作答"
+  },
+  result: {
+    eyebrow: "RESULT / REVIEW",
+    passTitle: "答题通过",
+    failTitle: "本次未通过",
+    passSubtitle: "接下来把验证码填写到进群申请问题里，或者交给群内 bot 校验。错题解析可以按需展开查看。",
+    failSubtitle: "这次先把错题和正确答案过一遍，再重新开一轮会更稳。",
+    copyButton: "复制验证码",
+    copiedButton: "已复制",
+    homeButton: "返回首页",
+    retryButton: "返回重新答题",
+    reviewTitle: "错题解析",
+    noWrongTitle: "本次没有错题",
+    noWrongBody: "这次答题没有出现错误项，接下来只需要把验证码填写到进群申请问题即可。"
+  },
+  admin: {
+    eyebrow: "ADMIN / STUDIO",
+    title: "Q-gate 出题与配置工作台",
+    subtitle: "保持轻量、好看和可维护。题库与站点文案都能直接热更新。",
+    loginTitle: "管理员登录",
+    loginSubtitle: "使用管理员密码登录，浏览器可以记住密码；登录成功后工作台会建立轻量会话，不用每次重复输入。",
+    loginButton: "进入工作台",
+    logoutButton: "退出登录",
+    siteSettingsTitle: "站点文案",
+    siteSettingsNote: "想改名字、首页标题、按钮文案或品牌图，只需要维护这一份 YAML。"
+  }
+};
+
+type SiteSettingsContextValue = {
+  settings: SiteSettings;
+  loading: boolean;
+};
+
+const SiteSettingsContext = createContext<SiteSettingsContextValue>({
+  settings: defaultSiteSettings,
+  loading: true
+});
+
+export function SiteSettingsProvider({ children }: { children: ReactNode }) {
+  const [settings, setSettings] = useState(defaultSiteSettings);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    api
+      .getSiteSettings()
+      .then((payload) => {
+        if (!cancelled) {
+          setSettings(payload);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSettings(defaultSiteSettings);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return <SiteSettingsContext.Provider value={{ settings, loading }}>{children}</SiteSettingsContext.Provider>;
+}
+
+export function useSiteSettings() {
+  return useContext(SiteSettingsContext);
+}
