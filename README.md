@@ -6,7 +6,7 @@
 
 # Q-gate
 
-_A lightweight access quiz framework for Minecraft servers and community screening._
+_一个面向 Minecraft 白名单、进群审核与社区准入场景的轻量答题框架。_
 
 简单 · 轻量 · 好看
 
@@ -21,10 +21,10 @@ _A lightweight access quiz framework for Minecraft servers and community screeni
 </p>
 
 <p>
-  <a href="#quick-start">Quick Start</a> ·
-  <a href="#admin">Admin</a> ·
-  <a href="#usage-flow">Usage Flow</a> ·
-  <a href="#config">Config</a>
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#管理端">管理端</a> ·
+  <a href="#使用流程">使用流程</a> ·
+  <a href="#配置说明">配置说明</a>
 </p>
 
 </div>
@@ -35,7 +35,7 @@ _A lightweight access quiz framework for Minecraft servers and community screeni
 
 ---
 
-## Welcome
+## 项目介绍
 
 Q-gate 是一个偏向 Minecraft 白名单、进群审核和社区准入场景的轻量答题框架。
 
@@ -44,19 +44,19 @@ Q-gate 是一个偏向 Minecraft 白名单、进群审核和社区准入场景�
 - 运行态已经切到 SQLite，结构更稳也更适合长期维护
 - 默认视觉就是可直接改品牌后上线的清爽科幻风
 
-## Feature
-- **Quiz + Identity Binding**
+## 项目特点
+- **身份绑定校验**
   - 验证码会绑定到 `QQ + Minecraft 用户名`，适合做进群或白名单校验。
-- **Modern Admin Flow**
+- **管理端维护流程**
   - 管理端改成密码登录，并且每次重新进入都强制重新验证。
-- **Media Ready**
+- **多媒体题目支持**
   - 支持图片、音频、视频题目，首页图和绑定页图既能填 `http/https`，也能填站内相对路径。
-- **SQLite Runtime**
+- **SQLite 运行态**
   - 比原来的 JSON 运行态更稳，后续扩展统计和记录也更方便。
-- **Config First**
+- **配置优先**
   - 品牌名、文案、图片、题库和仓库链接都可以集中配置，二改门槛很低。
 
-## Project Structure
+## 项目结构
 
 - `apps/web`
   - 用户端答题页面 + 管理工作台
@@ -69,7 +69,7 @@ Q-gate 是一个偏向 Minecraft 白名单、进群审核和社区准入场景�
 - `apps/api/data/runtime/runtime.sqlite`
   - 运行态数据库
 
-## Quick Start
+## 快速开始
 
 先准备配置文件：
 
@@ -98,7 +98,7 @@ npm run build
 - 管理端：`http://localhost:5173/admin`
 - API：`http://localhost:4100/api`
 
-## Admin
+## 管理端
 
 管理端没有单独的前端端口，默认直接挂在 Web 的 `/admin` 路由下，但更重要的是它能直接承担日常维护工作。
 
@@ -114,7 +114,7 @@ npm run build
 3. 修改首页图、绑定页图和仓库链接这类站点资源入口。
 4. 直接热更新到前台页面，不需要每次都去翻源码改 React 组件。
 
-## Usage Flow
+## 使用流程
 
 使用流程：
 
@@ -126,7 +126,7 @@ npm run build
 
 如果题库要求全屏，系统会在正式开始前就拦截并提醒。
 
-## Config
+## 配置说明
 
 `apps/api/.env`：
 
@@ -170,7 +170,7 @@ VITE_API_BASE=http://localhost:4100/api
 - 旧字段 `ADMIN_KEY` 仍兼容，但新部署建议统一改成 `ADMIN_PASSWORD`
 - 修改 API 密码后需要重启 API
 
-## Content Entry
+## 内容维护
 
 这套框架把高频修改点尽量集中到了少量文件里，所以改品牌、改题库、换图片都很方便：
 
@@ -183,7 +183,7 @@ VITE_API_BASE=http://localhost:4100/api
 
 大多数维护者不需要进 React 源码就能接手这套项目。
 
-## Media
+## 多媒体支持
 
 Q-gate 不只是普通选择题页面，也支持把内容做得更完整：
 
@@ -192,7 +192,7 @@ Q-gate 不只是普通选择题页面，也支持把内容做得更完整：
 - 如果你把资源放到前端静态目录里，也可以直接写相对路径。
 - 这意味着它既能做纯文本审核题，也能做带图规则说明、语音辨识题或视频引导题。
 
-## Quiz Format
+## 题库格式
 
 ```yaml
 meta:
@@ -251,7 +251,7 @@ questions:
 
 `media.url` 既可以写 `/images/build-rule.png` 这种相对路径，也可以直接写完整远程地址。
 
-## Verify API
+## 校验接口
 
 这个接口给 bot、审核脚本或外部服务使用，用来校验某个短验证码是不是和指定的 `QQ + Minecraft 用户名` 对得上。
 
