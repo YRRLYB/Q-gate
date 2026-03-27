@@ -2,49 +2,63 @@
   <img src="./logo.png" alt="Q-gate logo" width="128" />
 </p>
 
-<h1 align="center">Q-gate</h1>
+<div align="center">
 
-<p align="center">一个偏向 Minecraft 白名单、进群审核和社区准入场景的轻量答题框架。</p>
+# Q-gate
 
-<p align="center">
-  简单 · 轻量 · 好看
+_A lightweight access quiz framework for Minecraft servers and community screening._
+
+简单 · 轻量 · 好看
+
+<p>
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" alt="React" />
+  <img src="https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/Fastify-5-000000?logo=fastify&logoColor=white" alt="Fastify" />
+  <img src="https://img.shields.io/badge/SQLite-Node%2022-003B57?logo=sqlite&logoColor=white" alt="SQLite" />
+  <img src="https://img.shields.io/badge/YAML-Config-CB171E?logo=yaml&logoColor=white" alt="YAML" />
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
 </p>
 
-## 项目定位
+</div>
 
-Q-gate 的目标很明确:
+---
 
-- 简单: 题库和站点文案尽量都用 YAML 维护
-- 轻量: React + Vite 前端，Fastify API，运行态落到单文件 SQLite
-- 好看: 默认就是可以直接拿来用的清爽科幻风界面
+## Welcome
 
-它适合这些场景:
+Q-gate 是一个偏向 Minecraft 白名单、进群审核和社区准入场景的轻量答题框架。
 
-- Minecraft 白名单问答
-- QQ 群审核题 / 进群验证
-- 社区准入测试
-- 需要把答题结果和身份信息绑定的轻量审核系统
+- 题库和站点文案都尽量用 YAML 维护
+- 前端使用 React + Vite，后端使用 Fastify
+- 运行态落到 SQLite，结构简单但比旧的 JSON 更稳
+- 默认界面走清爽科幻风，适合直接拿来改成自己的品牌
 
-## 核心特性
+## Feature
 
-- 题库使用 YAML，适合直接改字、备份和版本管理
-- 站点文案集中在 `site-settings.yaml`，改品牌名、按钮文案、标题不需要翻源码
-- 管理端使用密码登录，并要求每次进入重新验证
-- 运行态已经从 JSON 切到 SQLite，结构更稳，也更适合后续扩展
-- 首页图和绑定页图可以直接使用你自己的远程图片 API
-- 支持晴空 / 夜航主题切换
-- 支持单选、多选、文本题，以及题目里的图片、音频、视频资源
-- 支持通过一次性短验证码把答题结果绑定到 `QQ + Minecraft 用户名`
+- **Easy to Maintain**
+  - 题库、文案、图片入口都集中，改字不需要全局翻源码。
+- **Lightweight Runtime**
+  - 前后端结构直接，适合个人项目、小型社区或自建审核入口。
+- **Modern Admin Flow**
+  - 管理端使用密码登录，并要求每次进入重新验证。
+- **Quiz + Identity Binding**
+  - 支持把验证码和 `QQ + Minecraft 用户名` 绑定，用于后续审核校验。
+- **Media Ready**
+  - 支持图片、音频、视频题目，也支持远程图片 API。
 
-## 项目结构
+## Project Structure
 
-- `apps/web`: 用户答题前端 + 管理工作台
-- `apps/api`: 题库读取、开题、判分、验证码校验、管理端接口
-- `apps/api/data/starter-quiz.yaml`: 默认题库
-- `apps/api/data/site-settings.yaml`: 品牌名、文案、按钮、图片地址
-- `apps/api/data/runtime/runtime.sqlite`: 运行态数据库
+- `apps/web`
+  - 用户答题前端 + 管理工作台
+- `apps/api`
+  - 题库读取、开题、判分、验证码校验、管理端接口
+- `apps/api/data/starter-quiz.yaml`
+  - 默认题库
+- `apps/api/data/site-settings.yaml`
+  - 品牌名、文案、按钮、图片地址
+- `apps/api/data/runtime/runtime.sqlite`
+  - 运行态数据库
 
-## 快速开始
+## Quick Start
 
 先准备配置文件:
 
@@ -67,12 +81,12 @@ npm run dev:web
 npm run build
 ```
 
-默认情况下:
+默认本地地址:
 
-- API: `http://localhost:4100`
 - Web: `http://localhost:5173`
+- API: `http://localhost:4100`
 
-## 环境变量
+## Config
 
 `apps/api/.env` 示例:
 
@@ -96,21 +110,24 @@ VITE_API_BASE=http://localhost:4100/api
 
 补充说明:
 
-- 管理端现在优先读取 `ADMIN_PASSWORD`
+- 管理端优先读取 `ADMIN_PASSWORD`
 - 旧字段 `ADMIN_KEY` 仍兼容，但新部署建议统一改成 `ADMIN_PASSWORD`
-- 如果你修改了 API 的密码配置，需要重启 API
+- 修改 API 密码配置后，需要重启 API
 
-## 维护入口
+## Content Entry
 
-大多数维护工作只会落在这三处:
+日常维护基本只需要看三处:
 
-1. 改题目和评分规则: `apps/api/data/starter-quiz.yaml`
-2. 改名字、标题、按钮文案: `apps/api/data/site-settings.yaml`
-3. 改首页图和绑定页图: `apps/api/data/site-settings.yaml` 里的 `media`
+1. `apps/api/data/starter-quiz.yaml`
+   - 改题目、答案、分值和组卷方式
+2. `apps/api/data/site-settings.yaml`
+   - 改站点名字、页面标题、按钮文案、说明文字
+3. `apps/api/data/site-settings.yaml` 里的 `media`
+   - 改首页图和绑定页图
 
-这意味着多数维护者都不需要去改 React 代码。
+这意味着大多数维护者都不需要去改 React 代码。
 
-## 图片配置
+## Media
 
 直接改 `apps/api/data/site-settings.yaml` 里的 `media`:
 
@@ -121,9 +138,9 @@ media:
   entryHeroImage: https://photo.yrrlyb.top/api.php?sort=mp
 ```
 
-如果你后面换图床或者改成本地路径，也还是只需要改这一处。
+如果以后换图床或者改成本地路径，也还是只需要改这一处。
 
-## 题库格式示例
+## Quiz Format
 
 ```yaml
 meta:
@@ -159,20 +176,7 @@ questions:
 
 文本题的 `answer` 支持多个关键词，当前逻辑按“答案里需要包含这些关键词”来判断。
 
-## 局域网手机测试
-
-1. 保持 API 启动: `npm run dev:api`
-2. 前端用公开模式启动: `npm run dev:web:public`
-3. 把 `apps/api/.env` 里的 `APP_ORIGIN` 改成你的前端局域网地址
-4. 把 `apps/web/.env` 里的 `VITE_API_BASE` 改成你的 API 局域网地址
-5. 手机访问 `http://你的电脑局域网IP:5173`
-
-例如:
-
-- 前端: `http://192.168.1.23:5173`
-- API: `http://192.168.1.23:4100/api`
-
-## Bot 校验接口
+## Verify API
 
 请求:
 
@@ -208,7 +212,7 @@ Content-Type: application/json
 }
 ```
 
-## 适合谁用
+## For Who
 
 - 想快速搭一个入群答题系统的人
 - 想让别人容易接手维护的人
