@@ -29,6 +29,10 @@ _A lightweight access quiz framework for Minecraft servers and community screeni
 
 </div>
 
+<p align="center">
+  <img src="./首页实机展示.png" alt="Q-gate preview" width="100%" />
+</p>
+
 ---
 
 ## Welcome
