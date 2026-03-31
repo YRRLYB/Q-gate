@@ -11,7 +11,7 @@ import {
   normalizeAnswerValue,
   normalizeQuestionGroup,
   normalizeTextAnswer,
-  quizDocumentSchema
+  quizDocumentSchema,
 } from "./schema.js";
 
 export type StoredQuestion = {
@@ -40,7 +40,10 @@ export type StoredQuiz = {
 };
 
 export type AttemptQuizSnapshot = {
-  meta: Omit<StoredQuizMeta, "updatedAt"> & { questionBankSize: number; displayQuestionCount: number };
+  meta: Omit<StoredQuizMeta, "updatedAt"> & {
+    questionBankSize: number;
+    displayQuestionCount: number;
+  };
   questions: StoredQuestion[];
 };
 
@@ -48,6 +51,7 @@ export type AttemptRecord = {
   id: string;
   quizSlug: string;
   qqHash: string;
+  qqMask: string | null;
   playerName: string;
   startedAt: string;
   submittedAt: string | null;
@@ -61,7 +65,10 @@ export type AttemptRecord = {
 
 type RuntimeState = {
   quizzes: Record<string, StoredQuiz>;
-  attempts: Record<string, AttemptRecord & { proofJti?: string | null; proofStatus?: string | null }>;
+  attempts: Record<
+    string,
+    AttemptRecord & { proofJti?: string | null; proofStatus?: string | null }
+  >;
 };
 
 type QuizRow = {
@@ -76,6 +83,7 @@ type AttemptRow = {
   id: string;
   quiz_slug: string;
   qq_hash: string;
+  qq_mask: string | null;
   player_name: string;
   started_at: string;
   submitted_at: string | null;
@@ -107,6 +115,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     quiz_slug TEXT NOT NULL,
     qq_hash TEXT NOT NULL,
+    qq_mask TEXT,
     player_name TEXT NOT NULL,
     started_at TEXT NOT NULL,
     submitted_at TEXT,
@@ -120,8 +129,26 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_quizzes_updated_at ON quizzes(updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_attempts_quiz_identity ON attempts(quiz_slug, qq_hash, player_name, status);
+  CREATE INDEX IF NOT EXISTS idx_attempts_quiz_identity_submitted ON attempts(quiz_slug, qq_hash, player_name, submitted_at DESC);
   CREATE INDEX IF NOT EXISTS idx_attempts_verification_code_hash ON attempts(verification_code_hash);
 `);
+
+function ensureColumn(
+  tableName: string,
+  columnName: string,
+  definition: string,
+) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+    name?: string;
+  }>;
+  if (columns.some((column) => column.name === columnName)) {
+    return;
+  }
+
+  db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${definition}`);
+}
+
+ensureColumn("attempts", "qq_mask", "qq_mask TEXT");
 
 function parseJson<T>(value: string | null | undefined, fallback: T) {
   if (!value) {
@@ -139,18 +166,27 @@ function cloneQuestion(question: StoredQuestion): StoredQuestion {
   return {
     ...question,
     media: question.media ? { ...question.media } : undefined,
-    options: question.options ? question.options.map((option) => ({ ...option })) : undefined,
+    options: question.options
+      ? question.options.map((option) => ({ ...option }))
+      : undefined,
     answer: [...question.answer],
-    answerDisplay: [...question.answerDisplay]
+    answerDisplay: [...question.answerDisplay],
   };
 }
 
-function getDisplayQuestionCount(meta: QuizDocument["meta"], totalCount: number) {
+function getDisplayQuestionCount(
+  meta: QuizDocument["meta"],
+  totalCount: number,
+) {
   if (meta.selectionMode !== "random") {
     return totalCount;
   }
 
-  const byTypeCount = [meta.drawSingleCount ?? 0, meta.drawMultipleCount ?? 0, meta.drawTextCount ?? 0]
+  const byTypeCount = [
+    meta.drawSingleCount ?? 0,
+    meta.drawMultipleCount ?? 0,
+    meta.drawTextCount ?? 0,
+  ]
     .filter((count) => count > 0)
     .reduce((sum, count) => sum + count, 0);
 
@@ -163,7 +199,7 @@ function toStoredQuiz(document: QuizDocument, sourceYaml: string): StoredQuiz {
   return {
     meta: {
       ...document.meta,
-      updatedAt: now
+      updatedAt: now,
     },
     sourceYaml,
     questions: document.questions.map((question, index) => {
@@ -187,17 +223,25 @@ function toStoredQuiz(document: QuizDocument, sourceYaml: string): StoredQuiz {
         options: "options" in question ? question.options : undefined,
         answer:
           question.type === "multiple"
-            ? [createAnswerSignature(normalizeAnswerValue(question.type, question.answer))]
+            ? [
+                createAnswerSignature(
+                  normalizeAnswerValue(question.type, question.answer),
+                ),
+              ]
             : question.type === "text"
-              ? question.answer.map((answerValue) => normalizeTextAnswer(answerValue))
+              ? question.answer.map((answerValue) =>
+                  normalizeTextAnswer(answerValue),
+                )
               : question.answer.map((answerValue) =>
-                  createAnswerSignature(normalizeAnswerValue(question.type, answerValue))
+                  createAnswerSignature(
+                    normalizeAnswerValue(question.type, answerValue),
+                  ),
                 ),
         answerDisplay,
         answerMode: question.type === "text" ? "containsAll" : "exact",
-        orderIndex: index
+        orderIndex: index,
       } satisfies StoredQuestion;
-    })
+    }),
   };
 }
 
@@ -217,17 +261,17 @@ function hydrateQuizRow(row: QuizRow | undefined) {
     examMode: "closed_book",
     requireFullscreen: false,
     selectionMode: "fixed",
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
   });
   const questions = parseJson<StoredQuestion[]>(row.questions_json, []);
 
   return {
     meta: {
       ...meta,
-      updatedAt: row.updated_at
+      updatedAt: row.updated_at,
     },
     sourceYaml: row.source_yaml,
-    questions: questions.map(cloneQuestion)
+    questions: questions.map(cloneQuestion),
   } satisfies StoredQuiz;
 }
 
@@ -236,12 +280,16 @@ function hydrateAttemptRow(row: AttemptRow | undefined) {
     return null;
   }
 
-  const quizSnapshot = parseJson<AttemptQuizSnapshot | undefined>(row.quiz_snapshot_json, undefined);
+  const quizSnapshot = parseJson<AttemptQuizSnapshot | undefined>(
+    row.quiz_snapshot_json,
+    undefined,
+  );
 
   return {
     id: row.id,
     quizSlug: row.quiz_slug,
     qqHash: row.qq_hash,
+    qqMask: row.qq_mask,
     playerName: row.player_name,
     startedAt: row.started_at,
     submittedAt: row.submitted_at,
@@ -253,9 +301,9 @@ function hydrateAttemptRow(row: AttemptRow | undefined) {
     quizSnapshot: quizSnapshot
       ? {
           meta: { ...quizSnapshot.meta },
-          questions: quizSnapshot.questions.map(cloneQuestion)
+          questions: quizSnapshot.questions.map(cloneQuestion),
         }
-      : undefined
+      : undefined,
   } satisfies AttemptRecord;
 }
 
@@ -269,13 +317,13 @@ function persistQuiz(quiz: StoredQuiz) {
         source_yaml = excluded.source_yaml,
         questions_json = excluded.questions_json,
         updated_at = excluded.updated_at
-    `
+    `,
   ).run(
     quiz.meta.slug,
     JSON.stringify(quiz.meta),
     quiz.sourceYaml,
     JSON.stringify(quiz.questions),
-    quiz.meta.updatedAt
+    quiz.meta.updatedAt,
   );
 }
 
@@ -286,6 +334,7 @@ function persistAttempt(attempt: AttemptRecord) {
         id,
         quiz_slug,
         qq_hash,
+        qq_mask,
         player_name,
         started_at,
         submitted_at,
@@ -296,10 +345,11 @@ function persistAttempt(attempt: AttemptRecord) {
         verification_status,
         quiz_snapshot_json
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         quiz_slug = excluded.quiz_slug,
         qq_hash = excluded.qq_hash,
+        qq_mask = excluded.qq_mask,
         player_name = excluded.player_name,
         started_at = excluded.started_at,
         submitted_at = excluded.submitted_at,
@@ -309,11 +359,12 @@ function persistAttempt(attempt: AttemptRecord) {
         verification_expires_at = excluded.verification_expires_at,
         verification_status = excluded.verification_status,
         quiz_snapshot_json = excluded.quiz_snapshot_json
-    `
+    `,
   ).run(
     attempt.id,
     attempt.quizSlug,
     attempt.qqHash,
+    attempt.qqMask,
     attempt.playerName,
     attempt.startedAt,
     attempt.submittedAt,
@@ -322,13 +373,17 @@ function persistAttempt(attempt: AttemptRecord) {
     attempt.verificationCodeHash,
     attempt.verificationExpiresAt,
     attempt.verificationStatus,
-    attempt.quizSnapshot ? JSON.stringify(attempt.quizSnapshot) : null
+    attempt.quizSnapshot ? JSON.stringify(attempt.quizSnapshot) : null,
   );
 }
 
 function migrateLegacyStateIfNeeded() {
-  const quizCountRow = db.prepare("SELECT COUNT(*) AS count FROM quizzes").get() as { count?: number } | undefined;
-  const attemptCountRow = db.prepare("SELECT COUNT(*) AS count FROM attempts").get() as { count?: number } | undefined;
+  const quizCountRow = db
+    .prepare("SELECT COUNT(*) AS count FROM quizzes")
+    .get() as { count?: number } | undefined;
+  const attemptCountRow = db
+    .prepare("SELECT COUNT(*) AS count FROM attempts")
+    .get() as { count?: number } | undefined;
   const quizCount = Number(quizCountRow?.count ?? 0);
   const attemptCount = Number(attemptCountRow?.count ?? 0);
 
@@ -336,15 +391,21 @@ function migrateLegacyStateIfNeeded() {
     return;
   }
 
-  const legacyState = parseJson<RuntimeState>(readFileSync(legacyStatePath, "utf8"), { quizzes: {}, attempts: {} });
+  const legacyState = parseJson<RuntimeState>(
+    readFileSync(legacyStatePath, "utf8"),
+    { quizzes: {}, attempts: {} },
+  );
 
   db.exec("BEGIN");
   try {
     for (const quiz of Object.values(legacyState.quizzes)) {
       persistQuiz({
-        meta: { ...quiz.meta, updatedAt: quiz.meta.updatedAt ?? new Date().toISOString() },
+        meta: {
+          ...quiz.meta,
+          updatedAt: quiz.meta.updatedAt ?? new Date().toISOString(),
+        },
         sourceYaml: quiz.sourceYaml,
-        questions: quiz.questions.map(cloneQuestion)
+        questions: quiz.questions.map(cloneQuestion),
       });
     }
 
@@ -353,6 +414,7 @@ function migrateLegacyStateIfNeeded() {
         id: attempt.id,
         quizSlug: attempt.quizSlug,
         qqHash: attempt.qqHash,
+        qqMask: attempt.qqMask ?? null,
         playerName: attempt.playerName,
         startedAt: attempt.startedAt,
         submittedAt: attempt.submittedAt ?? null,
@@ -364,9 +426,9 @@ function migrateLegacyStateIfNeeded() {
         quizSnapshot: attempt.quizSnapshot
           ? {
               meta: { ...attempt.quizSnapshot.meta },
-              questions: attempt.quizSnapshot.questions.map(cloneQuestion)
+              questions: attempt.quizSnapshot.questions.map(cloneQuestion),
             }
-          : undefined
+          : undefined,
       });
     }
 
@@ -395,12 +457,10 @@ export function syncSeedQuizFromFile() {
   return importQuizDocument(parsed, sourceYaml);
 }
 
-export function watchSeedQuizFile(
-  handlers?: {
-    onReload?: (slug: string) => void;
-    onError?: (error: Error) => void;
-  }
-) {
+export function watchSeedQuizFile(handlers?: {
+  onReload?: (slug: string) => void;
+  onError?: (error: Error) => void;
+}) {
   if (!existsSync(config.quizSeedFile)) {
     return;
   }
@@ -413,13 +473,17 @@ export function watchSeedQuizFile(
         handlers?.onReload?.(quiz.meta.slug);
       }
     } catch (error) {
-      handlers?.onError?.(error instanceof Error ? error : new Error("seed_reload_failed"));
+      handlers?.onError?.(
+        error instanceof Error ? error : new Error("seed_reload_failed"),
+      );
     }
   });
 }
 
 export function getQuizBySlug(slug: string) {
-  const row = db.prepare("SELECT * FROM quizzes WHERE slug = ? LIMIT 1").get(slug) as QuizRow | undefined;
+  const row = db
+    .prepare("SELECT * FROM quizzes WHERE slug = ? LIMIT 1")
+    .get(slug) as QuizRow | undefined;
   const quiz = hydrateQuizRow(row);
 
   if (!quiz) {
@@ -441,17 +505,24 @@ export function getQuizBySlug(slug: string) {
       drawCount: quiz.meta.drawCount,
       drawSingleCount: quiz.meta.drawSingleCount,
       drawMultipleCount: quiz.meta.drawMultipleCount,
-      drawTextCount: quiz.meta.drawTextCount
+      drawTextCount: quiz.meta.drawTextCount,
     },
     sourceYaml: quiz.sourceYaml,
     questionBankSize: quiz.questions.length,
-    displayQuestionCount: getDisplayQuestionCount(quiz.meta, quiz.questions.length),
-    questions: quiz.questions.map(cloneQuestion)
+    displayQuestionCount: getDisplayQuestionCount(
+      quiz.meta,
+      quiz.questions.length,
+    ),
+    questions: quiz.questions.map(cloneQuestion),
   };
 }
 
 export function listQuizzes() {
-  const rows = db.prepare("SELECT slug, meta_json, updated_at FROM quizzes ORDER BY updated_at DESC").all() as Array<Pick<QuizRow, "slug" | "meta_json" | "updated_at">>;
+  const rows = db
+    .prepare(
+      "SELECT slug, meta_json, updated_at FROM quizzes ORDER BY updated_at DESC",
+    )
+    .all() as Array<Pick<QuizRow, "slug" | "meta_json" | "updated_at">>;
 
   return rows.map((row) => {
     const meta = parseJson<StoredQuizMeta>(row.meta_json, {
@@ -465,7 +536,7 @@ export function listQuizzes() {
       examMode: "closed_book",
       requireFullscreen: false,
       selectionMode: "fixed",
-      updatedAt: row.updated_at
+      updatedAt: row.updated_at,
     });
 
     return {
@@ -476,7 +547,7 @@ export function listQuizzes() {
       passScore: meta.passScore,
       durationSec: meta.durationSec,
       shuffleQuestions: meta.shuffleQuestions,
-      updatedAt: row.updated_at
+      updatedAt: row.updated_at,
     };
   });
 }
@@ -485,24 +556,16 @@ export function createAttemptRecord(input: {
   id: string;
   quizSlug: string;
   qqHash: string;
+  qqMask: string | null;
   playerName: string;
   startedAt: string;
   quizSnapshot?: AttemptQuizSnapshot;
 }) {
-  db.prepare(
-    `
-      DELETE FROM attempts
-      WHERE quiz_slug = ?
-        AND qq_hash = ?
-        AND player_name = ?
-        AND status = 'active'
-    `
-  ).run(input.quizSlug, input.qqHash, input.playerName);
-
   persistAttempt({
     id: input.id,
     quizSlug: input.quizSlug,
     qqHash: input.qqHash,
+    qqMask: input.qqMask,
     playerName: input.playerName,
     startedAt: input.startedAt,
     submittedAt: null,
@@ -514,14 +577,85 @@ export function createAttemptRecord(input: {
     quizSnapshot: input.quizSnapshot
       ? {
           meta: { ...input.quizSnapshot.meta },
-          questions: input.quizSnapshot.questions.map(cloneQuestion)
+          questions: input.quizSnapshot.questions.map(cloneQuestion),
         }
-      : undefined
+      : undefined,
   });
 }
 
+export function getActiveAttemptByIdentity(input: {
+  quizSlug: string;
+  qqHash: string;
+  playerName: string;
+}) {
+  const row = db
+    .prepare(
+      `
+      SELECT *
+      FROM attempts
+      WHERE quiz_slug = ?
+        AND qq_hash = ?
+        AND LOWER(player_name) = LOWER(?)
+        AND status = 'active'
+      ORDER BY started_at DESC
+      LIMIT 1
+    `,
+    )
+    .get(input.quizSlug, input.qqHash, input.playerName) as
+    | AttemptRow
+    | undefined;
+
+  return hydrateAttemptRow(row);
+}
+
+export function getConflictingActiveAttemptByIdentity(input: {
+  quizSlug: string;
+  qqHash: string;
+  playerName: string;
+}) {
+  const row = db
+    .prepare(
+      `
+      SELECT *
+      FROM attempts
+      WHERE quiz_slug = ?
+        AND status = 'active'
+        AND (qq_hash = ? OR LOWER(player_name) = LOWER(?))
+      ORDER BY started_at DESC
+      LIMIT 1
+    `,
+    )
+    .get(input.quizSlug, input.qqHash, input.playerName) as
+    | AttemptRow
+    | undefined;
+
+  return hydrateAttemptRow(row);
+}
+
+export function getBoundAttemptByIdentity(input: {
+  qqHash: string;
+  playerName: string;
+}) {
+  const row = db
+    .prepare(
+      `
+      SELECT *
+      FROM attempts
+      WHERE status = 'passed'
+        AND (qq_hash = ? OR LOWER(player_name) = LOWER(?))
+      ORDER BY submitted_at DESC, started_at DESC
+      LIMIT 1
+    `,
+    )
+    .get(input.qqHash, input.playerName) as AttemptRow | undefined;
+
+  return hydrateAttemptRow(row);
+}
+
 export function getAttemptById(attemptId: string) {
-  const row = db.prepare("SELECT * FROM attempts WHERE id = ? LIMIT 1").get(attemptId) as AttemptRow | undefined;
+  const row = db
+    .prepare("SELECT * FROM attempts WHERE id = ? LIMIT 1")
+    .get(attemptId) as AttemptRow | undefined;
   return hydrateAttemptRow(row);
 }
 
@@ -543,7 +677,7 @@ export function finalizeAttempt(input: {
           verification_expires_at = ?,
           verification_status = ?
       WHERE id = ?
-    `
+    `,
   ).run(
     input.submittedAt,
     input.status,
@@ -551,38 +685,165 @@ export function finalizeAttempt(input: {
     input.verificationCodeHash ?? null,
     input.verificationExpiresAt ?? null,
     input.verificationCodeHash ? "issued" : null,
-    input.attemptId
+    input.attemptId,
   );
 }
 
 export function getAttemptByVerificationCodeHash(codeHash: string) {
-  const row = db.prepare("SELECT * FROM attempts WHERE verification_code_hash = ? LIMIT 1").get(codeHash) as AttemptRow | undefined;
+  const row = db
+    .prepare("SELECT * FROM attempts WHERE verification_code_hash = ? LIMIT 1")
+    .get(codeHash) as AttemptRow | undefined;
   return hydrateAttemptRow(row);
 }
 
+export function getLatestSubmittedAttemptByIdentity(input: {
+  quizSlug: string;
+  qqHash: string;
+  playerName: string;
+}) {
+  const row = db
+    .prepare(
+      `
+      SELECT *
+      FROM attempts
+      WHERE quiz_slug = ?
+        AND submitted_at IS NOT NULL
+        AND (qq_hash = ? OR LOWER(player_name) = LOWER(?))
+      ORDER BY submitted_at DESC
+      LIMIT 1
+    `,
+    )
+    .get(input.quizSlug, input.qqHash, input.playerName) as
+    | AttemptRow
+    | undefined;
+
+  return hydrateAttemptRow(row);
+}
+
+export function countSubmittedAttemptsByIdentitySince(input: {
+  quizSlug: string;
+  qqHash: string;
+  playerName: string;
+  submittedSince: string;
+}) {
+  const row = db
+    .prepare(
+      `
+      SELECT COUNT(*) AS count
+      FROM attempts
+      WHERE quiz_slug = ?
+        AND submitted_at IS NOT NULL
+        AND submitted_at >= ?
+        AND (qq_hash = ? OR LOWER(player_name) = LOWER(?))
+    `,
+    )
+    .get(
+      input.quizSlug,
+      input.submittedSince,
+      input.qqHash,
+      input.playerName,
+    ) as { count?: number } | undefined;
+
+  return Number(row?.count ?? 0);
+}
+
+export function listBoundAttempts(limit = 200) {
+  const rows = db
+    .prepare(
+      `
+      SELECT
+        a.id,
+        a.quiz_slug,
+        a.qq_mask,
+        a.player_name,
+        a.submitted_at,
+        a.score,
+        a.verification_status,
+        q.meta_json
+      FROM attempts AS a
+      LEFT JOIN quizzes AS q
+        ON q.slug = a.quiz_slug
+      WHERE a.status = 'passed'
+        AND a.submitted_at IS NOT NULL
+      ORDER BY a.submitted_at DESC, a.started_at DESC
+      LIMIT ?
+    `,
+    )
+    .all(limit) as Array<{
+    id: string;
+    quiz_slug: string;
+    qq_mask: string | null;
+    player_name: string;
+    submitted_at: string;
+    score: number | null;
+    verification_status: AttemptRecord["verificationStatus"];
+    meta_json: string | null;
+  }>;
+
+  return rows.map((row) => {
+    const meta = parseJson<{ title?: string } | null>(row.meta_json, null);
+
+    return {
+      attemptId: row.id,
+      quizSlug: row.quiz_slug,
+      quizTitle: meta?.title ?? row.quiz_slug,
+      qqMask: row.qq_mask,
+      playerName: row.player_name,
+      submittedAt: row.submitted_at,
+      score: row.score,
+      verificationStatus: row.verification_status ?? null,
+      hasAvatar:
+        existsSync(join(config.avatarCacheDir, `${row.id}.jpg`)) ||
+        existsSync(join(config.avatarCacheDir, `${row.id}.png`)),
+    };
+  });
+}
+
+export function deleteBoundAttemptById(attemptId: string) {
+  const result = db
+    .prepare(
+      `
+      DELETE FROM attempts
+      WHERE id = ?
+        AND status = 'passed'
+    `,
+    )
+    .run(attemptId);
+
+  return Number(result.changes ?? 0) === 1;
+}
+
 export function hasActiveVerificationCodeHash(codeHash: string) {
-  const row = db.prepare(
-    `
+  const row = db
+    .prepare(
+      `
       SELECT 1 AS present
       FROM attempts
       WHERE verification_code_hash = ?
         AND verification_status = 'issued'
         AND verification_expires_at > ?
       LIMIT 1
-    `
-  ).get(codeHash, Date.now()) as { present?: number } | undefined;
+    `,
+    )
+    .get(codeHash, Date.now()) as { present?: number } | undefined;
 
   return row?.present === 1;
 }
 
-export function consumeVerificationCode(codeHash: string) {
-  db.prepare(
-    `
+export function consumeVerificationCode(codeHash: string, now = Date.now()) {
+  const result = db
+    .prepare(
+      `
       UPDATE attempts
       SET verification_status = 'consumed'
       WHERE verification_code_hash = ?
-    `
-  ).run(codeHash);
+        AND verification_status = 'issued'
+        AND verification_expires_at > ?
+    `,
+    )
+    .run(codeHash, now);
+
+  return Number(result.changes ?? 0) === 1;
 }
 
 export function parseQuizYaml(sourceYaml: string) {

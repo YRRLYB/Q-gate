@@ -13,12 +13,15 @@ export function issueVerificationCode() {
   return {
     code,
     codeHash: hashVerificationCode(code),
-    expiresAt: Date.now() + config.tokenTtlMinutes * 60 * 1000
+    expiresAt: Date.now() + config.tokenTtlMinutes * 60 * 1000,
   };
 }
 
 export function verifyVerificationCode(code: string, expectedHash: string) {
   const receivedHash = hashVerificationCode(code);
 
-  return timingSafeEqual(Buffer.from(receivedHash, "utf8"), Buffer.from(expectedHash, "utf8"));
+  return timingSafeEqual(
+    Buffer.from(receivedHash, "utf8"),
+    Buffer.from(expectedHash, "utf8"),
+  );
 }

@@ -9,6 +9,21 @@ import { preloadMediaAssets } from "../utils/preload";
 const RESTART_NOTICE_KEY = "mqg_restart_notice";
 const MAX_SECURITY_VIOLATIONS = 3;
 
+function explainResumeError(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : "attempt_resume_failed";
+
+  if (message === "attempt_closed") {
+    return "这场答题已经结束，当前链接不能再继续作答。";
+  }
+
+  if (message === "attempt_not_found") {
+    return "没有找到这场答题记录，请返回上一页重新开始。";
+  }
+
+  return message;
+}
+
 function formatTime(value: number) {
   const safe = Math.max(value, 0);
   const minutes = String(Math.floor(safe / 60)).padStart(2, "0");
@@ -17,7 +32,11 @@ function formatTime(value: number) {
 }
 
 function getQuestionTypeLabel(type: PublicQuestion["type"]) {
-  return type === "single" ? "单选题" : type === "multiple" ? "多选题" : "文本题";
+  return type === "single"
+    ? "单选题"
+    : type === "multiple"
+      ? "多选题"
+      : "文本题";
 }
 
 function getQuestionGroupLabel(group: PublicQuestion["group"]) {
@@ -35,10 +54,30 @@ function QuestionMedia({ question }: { question: PublicQuestion }) {
 
   return (
     <div className="question-media-block">
-      {question.media.type === "image" ? <img src={question.media.url} alt={question.media.caption ?? question.prompt} className="question-media-frame" /> : null}
-      {question.media.type === "audio" ? <audio controls className="question-media-audio" src={question.media.url} /> : null}
-      {question.media.type === "video" ? <video controls className="question-media-frame" src={question.media.url} /> : null}
-      {question.media.caption ? <p className="question-media-caption">{question.media.caption}</p> : null}
+      {question.media.type === "image" ? (
+        <img
+          src={question.media.url}
+          alt={question.media.caption ?? question.prompt}
+          className="question-media-frame"
+        />
+      ) : null}
+      {question.media.type === "audio" ? (
+        <audio
+          controls
+          className="question-media-audio"
+          src={question.media.url}
+        />
+      ) : null}
+      {question.media.type === "video" ? (
+        <video
+          controls
+          className="question-media-frame"
+          src={question.media.url}
+        />
+      ) : null}
+      {question.media.caption ? (
+        <p className="question-media-caption">{question.media.caption}</p>
+      ) : null}
     </div>
   );
 }
@@ -52,7 +91,14 @@ type RichTextAnswerProps = {
   onChange: (payload: { text: string; html: string }) => void;
 };
 
-function RichTextAnswer({ questionId, value, htmlValue, placeholder, disabled, onChange }: RichTextAnswerProps) {
+function RichTextAnswer({
+  questionId,
+  value,
+  htmlValue,
+  placeholder,
+  disabled,
+  onChange,
+}: RichTextAnswerProps) {
   const editorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -73,7 +119,7 @@ function RichTextAnswer({ questionId, value, htmlValue, placeholder, disabled, o
 
     onChange({
       text: editorRef.current.innerText,
-      html: editorRef.current.innerHTML
+      html: editorRef.current.innerHTML,
     });
   }
 
@@ -90,11 +136,46 @@ function RichTextAnswer({ questionId, value, htmlValue, placeholder, disabled, o
   return (
     <div className={`rich-answer-shell ${disabled ? "is-disabled" : ""}`}>
       <div className="rich-answer-toolbar">
-        <button type="button" className="rich-tool-button" onClick={() => runCommand("bold")} disabled={disabled}>B</button>
-        <button type="button" className="rich-tool-button" onClick={() => runCommand("italic")} disabled={disabled}>I</button>
-        <button type="button" className="rich-tool-button" onClick={() => runCommand("insertUnorderedList")} disabled={disabled}>列表</button>
-        <button type="button" className="rich-tool-button" onClick={() => runCommand("formatBlock", "blockquote")} disabled={disabled}>引用</button>
-        <button type="button" className="rich-tool-button" onClick={() => runCommand("removeFormat")} disabled={disabled}>清除</button>
+        <button
+          type="button"
+          className="rich-tool-button"
+          onClick={() => runCommand("bold")}
+          disabled={disabled}
+        >
+          B
+        </button>
+        <button
+          type="button"
+          className="rich-tool-button"
+          onClick={() => runCommand("italic")}
+          disabled={disabled}
+        >
+          I
+        </button>
+        <button
+          type="button"
+          className="rich-tool-button"
+          onClick={() => runCommand("insertUnorderedList")}
+          disabled={disabled}
+        >
+          列表
+        </button>
+        <button
+          type="button"
+          className="rich-tool-button"
+          onClick={() => runCommand("formatBlock", "blockquote")}
+          disabled={disabled}
+        >
+          引用
+        </button>
+        <button
+          type="button"
+          className="rich-tool-button"
+          onClick={() => runCommand("removeFormat")}
+          disabled={disabled}
+        >
+          清除
+        </button>
       </div>
       <div
         ref={editorRef}
@@ -114,6 +195,8 @@ export function QuizSessionPage() {
   const navigate = useNavigate();
   const { settings } = useSiteSettings();
   const [record, setRecord] = useState<SessionRecord | null>(null);
+  const [recordLoading, setRecordLoading] = useState(true);
+  const [recordError, setRecordError] = useState("");
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [richDrafts, setRichDrafts] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -130,19 +213,86 @@ export function QuizSessionPage() {
   const questionRefs = useRef<Array<HTMLElement | null>>([]);
   const wasHiddenRef = useRef(false);
 
-  useEffect(() => {
-    const raw = sessionStorage.getItem(sessionKey(attemptId));
-    if (!raw) {
-      return;
-    }
-
-    const parsed = JSON.parse(raw) as SessionRecord;
-    setRecord(parsed);
-    setTimeLeft(Math.max(parsed.quiz.durationSec - Math.floor((Date.now() - parsed.startedAt) / 1000), 0));
-    setActiveQuestionId(parsed.quiz.questions[0]?.id ?? "");
+  function applyRecord(nextRecord: SessionRecord) {
+    setRecord(nextRecord);
+    setAnswers({});
+    setRichDrafts({});
+    setAutoSubmitted(false);
+    setSecurityViolations(0);
+    setSecurityMessage("");
+    setTimeLeft(
+      Math.max(
+        nextRecord.quiz.durationSec -
+          Math.floor((Date.now() - nextRecord.startedAt) / 1000),
+        0,
+      ),
+    );
+    setActiveQuestionId(nextRecord.quiz.questions[0]?.id ?? "");
     setIsFullscreenActive(Boolean(document.fullscreenElement));
+    setFullscreenStarted(Boolean(document.fullscreenElement));
     setMediaReady(false);
     setMediaNotice("");
+    setError("");
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setRecord(null);
+    setRecordLoading(true);
+    setRecordError("");
+
+    const raw = sessionStorage.getItem(sessionKey(attemptId));
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as SessionRecord;
+        if (!cancelled) {
+          applyRecord(parsed);
+          setRecordLoading(false);
+        }
+        return () => {
+          cancelled = true;
+        };
+      } catch {
+        sessionStorage.removeItem(sessionKey(attemptId));
+      }
+    }
+
+    void api
+      .getAttemptSession(attemptId)
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+
+        const resumedRecord: SessionRecord = {
+          attemptId: payload.attemptId,
+          quiz: payload.quiz,
+          playerName: payload.playerName,
+          qq: "",
+          startedAt: new Date(payload.startedAt).getTime(),
+        };
+
+        sessionStorage.setItem(
+          sessionKey(payload.attemptId),
+          JSON.stringify(resumedRecord),
+        );
+        applyRecord(resumedRecord);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setRecordError(explainResumeError(err));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setRecordLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [attemptId]);
 
   useEffect(() => {
@@ -157,7 +307,10 @@ export function QuizSessionPage() {
     void preloadMediaAssets(
       record.quiz.questions
         .filter((question) => question.media?.url)
-        .map((question) => ({ type: question.media!.type, url: question.media!.url }))
+        .map((question) => ({
+          type: question.media!.type,
+          url: question.media!.url,
+        })),
     ).then((summary) => {
       if (cancelled) {
         return;
@@ -165,7 +318,9 @@ export function QuizSessionPage() {
 
       setMediaReady(true);
       if (summary.forced > 0) {
-        setMediaNotice(`有 ${summary.forced} 个多媒体资源在两轮预加载后仍未完全打开，Q-gate 已放行进入答题，相关资源会继续尝试加载。`);
+        setMediaNotice(
+          `有 ${summary.forced} 个多媒体资源在两轮预加载后仍未完全打开，Q-gate 已放行进入答题，相关资源会继续尝试加载。`,
+        );
       }
     });
 
@@ -177,7 +332,9 @@ export function QuizSessionPage() {
   function registerViolation(message: string) {
     setSecurityViolations((current) => {
       const next = current + 1;
-      setSecurityMessage(`${message} 当前已记录 ${next} / ${MAX_SECURITY_VIOLATIONS} 次。`);
+      setSecurityMessage(
+        `${message} 当前已记录 ${next} / ${MAX_SECURITY_VIOLATIONS} 次。`,
+      );
       return next;
     });
   }
@@ -198,7 +355,8 @@ export function QuizSessionPage() {
     };
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    return () =>
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, [record, fullscreenStarted]);
 
   useEffect(() => {
@@ -221,7 +379,8 @@ export function QuizSessionPage() {
     };
 
     document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibility);
   }, [record]);
 
   useEffect(() => {
@@ -230,7 +389,10 @@ export function QuizSessionPage() {
     }
 
     sessionStorage.removeItem(sessionKey(attemptId));
-    sessionStorage.setItem(RESTART_NOTICE_KEY, "安全校验触发次数已达上限，本次答题已作废，请重新绑定后再次开始。");
+    sessionStorage.setItem(
+      RESTART_NOTICE_KEY,
+      "安全校验触发次数已达上限，本次答题已作废，请重新绑定后再次开始。",
+    );
     navigate(`/quiz/${slug}?restart=security`, { replace: true });
   }, [attemptId, navigate, securityViolations, slug]);
 
@@ -240,7 +402,9 @@ export function QuizSessionPage() {
     }
 
     const timer = window.setInterval(() => {
-      const next = record.quiz.durationSec - Math.floor((Date.now() - record.startedAt) / 1000);
+      const next =
+        record.quiz.durationSec -
+        Math.floor((Date.now() - record.startedAt) / 1000);
       setTimeLeft(Math.max(next, 0));
     }, 1000);
 
@@ -264,7 +428,7 @@ export function QuizSessionPage() {
           const rect = node.getBoundingClientRect();
           return {
             id: questions[index]?.id ?? "",
-            offset: Math.abs(rect.top - 168)
+            offset: Math.abs(rect.top - 168),
           };
         })
         .filter(Boolean) as Array<{ id: string; offset: number }>;
@@ -299,7 +463,9 @@ export function QuizSessionPage() {
         await document.documentElement.requestFullscreen();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "fullscreen_request_failed");
+      setError(
+        err instanceof Error ? err.message : "fullscreen_request_failed",
+      );
     }
   }
 
@@ -314,7 +480,10 @@ export function QuizSessionPage() {
         setError("作答时间已到，系统正在自动交卷。");
       }
       const result = await api.submitAttempt(record.attemptId, answers);
-      sessionStorage.setItem(resultKey(record.attemptId), JSON.stringify(result));
+      sessionStorage.setItem(
+        resultKey(record.attemptId),
+        JSON.stringify(result),
+      );
       navigate(`/quiz/${slug}/result/${record.attemptId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "submit_failed");
@@ -343,8 +512,12 @@ export function QuizSessionPage() {
 
   function updateMultiple(id: string, option: string, checked: boolean) {
     setAnswers((current) => {
-      const existing = Array.isArray(current[id]) ? [...(current[id] as string[])] : [];
-      const next = checked ? [...new Set([...existing, option])] : existing.filter((item) => item !== option);
+      const existing = Array.isArray(current[id])
+        ? [...(current[id] as string[])]
+        : [];
+      const next = checked
+        ? [...new Set([...existing, option])]
+        : existing.filter((item) => item !== option);
       return { ...current, [id]: next };
     });
   }
@@ -358,14 +531,19 @@ export function QuizSessionPage() {
     setActiveQuestionId(record?.quiz.questions[index]?.id ?? "");
   }
 
-  const requiresFullscreenEntry = Boolean(record?.quiz.requireFullscreen && !isFullscreenActive);
+  const requiresFullscreenEntry = Boolean(
+    record?.quiz.requireFullscreen && !isFullscreenActive,
+  );
   const locked = submitting || timeLeft <= 0 || requiresFullscreenEntry;
   const progress = useMemo(() => {
     if (!record) {
       return 0;
     }
 
-    return Math.max(Math.min((timeLeft / record.quiz.durationSec) * 100, 100), 0);
+    return Math.max(
+      Math.min((timeLeft / record.quiz.durationSec) * 100, 100),
+      0,
+    );
   }, [record, timeLeft]);
 
   const answeredCount = useMemo(() => {
@@ -375,19 +553,42 @@ export function QuizSessionPage() {
 
     return record.quiz.questions.filter((question) => {
       const value = answers[question.id];
-      return typeof value === "string" ? value.trim().length > 0 : Array.isArray(value) ? value.length > 0 : false;
+      return typeof value === "string"
+        ? value.trim().length > 0
+        : Array.isArray(value)
+          ? value.length > 0
+          : false;
     }).length;
   }, [answers, record]);
 
-  const questionCount = record?.quiz.displayQuestionCount ?? record?.quiz.questions.length ?? 0;
-  const needsSecurityOverlay = Boolean(record?.quiz.requireFullscreen && (!isFullscreenActive || securityMessage));
+  const questionCount =
+    record?.quiz.displayQuestionCount ?? record?.quiz.questions.length ?? 0;
+  const needsSecurityOverlay = Boolean(
+    record?.quiz.requireFullscreen && (!isFullscreenActive || securityMessage),
+  );
+
+  if (recordLoading) {
+    return (
+      <LoadingStage
+        label="SESSION / LOAD"
+        hint={settings.session.loadingHint}
+      />
+    );
+  }
 
   if (!record) {
     return (
-      <Frame eyebrow="SESSION / LOST" title={settings.session.lostTitle} subtitle={settings.session.lostSubtitle}>
+      <Frame
+        eyebrow="SESSION / LOST"
+        title={settings.session.lostTitle}
+        subtitle={settings.session.lostSubtitle}
+      >
         <section className="content-grid content-grid-single">
           <article className="card">
-            <Link to={`/quiz/${slug}`} className="ghost-link">{settings.session.lostBackLabel}</Link>
+            {recordError ? <p className="error-text">{recordError}</p> : null}
+            <Link to={`/quiz/${slug}`} className="ghost-link">
+              {settings.session.lostBackLabel}
+            </Link>
           </article>
         </section>
       </Frame>
@@ -395,7 +596,12 @@ export function QuizSessionPage() {
   }
 
   if (!mediaReady) {
-    return <LoadingStage label="SESSION / PRELOAD" hint={settings.session.loadingHint} />;
+    return (
+      <LoadingStage
+        label="SESSION / PRELOAD"
+        hint={settings.session.loadingHint}
+      />
+    );
   }
 
   if (needsSecurityOverlay) {
@@ -405,11 +611,29 @@ export function QuizSessionPage() {
         <div className="security-overlay security-overlay-fullscreen">
           <div className="security-overlay-card security-overlay-card-compact">
             <StatusPill label="Security" />
-            <h3>{isFullscreenActive ? "请先处理当前安全警告" : settings.session.fullscreenTitle}</h3>
+            <h3>
+              {isFullscreenActive
+                ? "请先处理当前安全警告"
+                : settings.session.fullscreenTitle}
+            </h3>
             <p>{securityMessage || settings.session.fullscreenBody}</p>
             <div className="security-overlay-actions">
-              {!isFullscreenActive ? <button className="primary-button" onClick={() => void requestFullscreenMode()}>{settings.session.fullscreenButton}</button> : null}
-              {isFullscreenActive && securityMessage ? <button className="primary-button" onClick={() => setSecurityMessage("")}>{settings.session.resumeButton}</button> : null}
+              {!isFullscreenActive ? (
+                <button
+                  className="primary-button"
+                  onClick={() => void requestFullscreenMode()}
+                >
+                  {settings.session.fullscreenButton}
+                </button>
+              ) : null}
+              {isFullscreenActive && securityMessage ? (
+                <button
+                  className="primary-button"
+                  onClick={() => setSecurityMessage("")}
+                >
+                  {settings.session.resumeButton}
+                </button>
+              ) : null}
             </div>
             <div className="hero-mini-points security-chip-row">
               <span>已记录 {securityViolations} 次</span>
@@ -429,13 +653,19 @@ export function QuizSessionPage() {
       subtitle={settings.session.subtitle}
       heroClassName="hero-panel-compact hero-panel-session"
       aside={
-        <div className={`countdown-panel ${timeLeft <= 120 ? "is-urgent" : ""}`}>
+        <div
+          className={`countdown-panel ${timeLeft <= 120 ? "is-urgent" : ""}`}
+        >
           <span className="countdown-label">Remaining</span>
           <strong className="countdown-value">{formatTime(timeLeft)}</strong>
           <div className="timer-track">
             <span className="timer-fill" style={{ width: `${progress}%` }} />
           </div>
-          <p>{timeLeft <= 120 ? "最后两分钟，请尽快检查后提交。" : `${record.playerName}，按自己的节奏答题就好。`}</p>
+          <p>
+            {timeLeft <= 120
+              ? "最后两分钟，请尽快检查后提交。"
+              : `${record.playerName}，按自己的节奏答题就好。`}
+          </p>
         </div>
       }
     >
@@ -446,26 +676,52 @@ export function QuizSessionPage() {
               <span>{questionCount} 题</span>
               <span>{record.quiz.passScore} 分及格</span>
               <span>{getExamModeLabel(record.quiz.examMode)}</span>
-              <span>{answeredCount} / {questionCount} 已作答</span>
-              <span>{record.quiz.requireFullscreen ? `安全校验 ${securityViolations} / ${MAX_SECURITY_VIOLATIONS}` : "常规作答"}</span>
+              <span>
+                {answeredCount} / {questionCount} 已作答
+              </span>
+              <span>
+                {record.quiz.requireFullscreen
+                  ? `安全校验 ${securityViolations} / ${MAX_SECURITY_VIOLATIONS}`
+                  : "常规作答"}
+              </span>
             </div>
           </div>
 
           <div className="question-stack">
             {record.quiz.questions.map((question, index) => {
-              const isRichText = question.type === "text" && (question.group === "subjective" || question.inputStyle === "essay");
+              const isRichText =
+                question.type === "text" &&
+                (question.group === "subjective" ||
+                  question.inputStyle === "essay");
               return (
-                <section key={question.id} ref={(node) => { questionRefs.current[index] = node; }} className="question-card question-card-rich">
+                <section
+                  key={question.id}
+                  ref={(node) => {
+                    questionRefs.current[index] = node;
+                  }}
+                  className="question-card question-card-rich"
+                >
                   <div className="question-head question-head-rich">
-                    <span className="question-index">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="question-index">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
                     <div className="question-head-copy">
                       <div className="question-meta-row">
-                        <span className="question-type-badge">{getQuestionTypeLabel(question.type)}</span>
-                        <span className="question-type-badge is-soft">{getQuestionGroupLabel(question.group)}</span>
-                        <span className="question-type-badge is-soft">{question.points} 分</span>
+                        <span className="question-type-badge">
+                          {getQuestionTypeLabel(question.type)}
+                        </span>
+                        <span className="question-type-badge is-soft">
+                          {getQuestionGroupLabel(question.group)}
+                        </span>
+                        <span className="question-type-badge is-soft">
+                          {question.points} 分
+                        </span>
                       </div>
                       <h3>{question.prompt}</h3>
-                      <p>{question.description ?? `请完成这道${getQuestionTypeLabel(question.type)}。`}</p>
+                      <p>
+                        {question.description ??
+                          `请完成这道${getQuestionTypeLabel(question.type)}。`}
+                      </p>
                     </div>
                   </div>
 
@@ -474,11 +730,17 @@ export function QuizSessionPage() {
                   {question.type === "text" && isRichText ? (
                     <RichTextAnswer
                       questionId={question.id}
-                      value={typeof answers[question.id] === "string" ? (answers[question.id] as string) : ""}
+                      value={
+                        typeof answers[question.id] === "string"
+                          ? (answers[question.id] as string)
+                          : ""
+                      }
                       htmlValue={richDrafts[question.id] ?? ""}
                       placeholder={question.placeholder ?? "请输入答案"}
                       disabled={locked}
-                      onChange={(payload) => updateRichText(question.id, payload)}
+                      onChange={(payload) =>
+                        updateRichText(question.id, payload)
+                      }
                     />
                   ) : null}
 
@@ -487,8 +749,14 @@ export function QuizSessionPage() {
                       className={`text-answer ${question.inputStyle === "essay" ? "is-essay" : "is-short"}`}
                       rows={question.inputStyle === "essay" ? 8 : 4}
                       placeholder={question.placeholder ?? "请输入答案"}
-                      value={typeof answers[question.id] === "string" ? (answers[question.id] as string) : ""}
-                      onChange={(event) => updateSingle(question.id, event.target.value)}
+                      value={
+                        typeof answers[question.id] === "string"
+                          ? (answers[question.id] as string)
+                          : ""
+                      }
+                      onChange={(event) =>
+                        updateSingle(question.id, event.target.value)
+                      }
                       disabled={locked}
                     />
                   ) : null}
@@ -498,9 +766,22 @@ export function QuizSessionPage() {
                       {question.options?.map((option) => {
                         const checked = answers[question.id] === option.key;
                         return (
-                          <label key={option.key} className={`option-card option-card-rich option-card-clean ${checked ? "is-selected" : ""}`}>
-                            <input type="radio" name={question.id} checked={checked} onChange={() => updateSingle(question.id, option.key)} disabled={locked} />
-                            <span className="option-key-badge">{option.key}</span>
+                          <label
+                            key={option.key}
+                            className={`option-card option-card-rich option-card-clean ${checked ? "is-selected" : ""}`}
+                          >
+                            <input
+                              type="radio"
+                              name={question.id}
+                              checked={checked}
+                              onChange={() =>
+                                updateSingle(question.id, option.key)
+                              }
+                              disabled={locked}
+                            />
+                            <span className="option-key-badge">
+                              {option.key}
+                            </span>
                             <div className="option-copy">
                               <strong>{option.text}</strong>
                             </div>
@@ -513,12 +794,30 @@ export function QuizSessionPage() {
                   {question.type === "multiple" ? (
                     <div className="option-grid option-grid-rich option-grid-clean">
                       {question.options?.map((option) => {
-                        const value = Array.isArray(answers[question.id]) ? (answers[question.id] as string[]) : [];
+                        const value = Array.isArray(answers[question.id])
+                          ? (answers[question.id] as string[])
+                          : [];
                         const checked = value.includes(option.key);
                         return (
-                          <label key={option.key} className={`option-card option-card-rich option-card-clean ${checked ? "is-selected" : ""}`}>
-                            <input type="checkbox" checked={checked} onChange={(event) => updateMultiple(question.id, option.key, event.target.checked)} disabled={locked} />
-                            <span className="option-key-badge">{option.key}</span>
+                          <label
+                            key={option.key}
+                            className={`option-card option-card-rich option-card-clean ${checked ? "is-selected" : ""}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(event) =>
+                                updateMultiple(
+                                  question.id,
+                                  option.key,
+                                  event.target.checked,
+                                )
+                              }
+                              disabled={locked}
+                            />
+                            <span className="option-key-badge">
+                              {option.key}
+                            </span>
                             <div className="option-copy">
                               <strong>{option.text}</strong>
                             </div>
@@ -535,7 +834,11 @@ export function QuizSessionPage() {
           {error ? <p className="error-text">{error}</p> : null}
           <div className="button-row split-actions">
             <p className="muted">{settings.session.submitHint}</p>
-            <button className="primary-button" onClick={() => void handleSubmit()} disabled={submitting || autoSubmitted || locked}>
+            <button
+              className="primary-button"
+              onClick={() => void handleSubmit()}
+              disabled={submitting || autoSubmitted || locked}
+            >
               {submitting ? "正在提交…" : settings.session.submitButton}
             </button>
           </div>
@@ -548,16 +851,27 @@ export function QuizSessionPage() {
           </div>
           <div className="hero-info-card compact exam-nav-summary">
             <span>剩余时间 {formatTime(timeLeft)}</span>
-            <span>已作答 {answeredCount} / {questionCount}</span>
+            <span>
+              已作答 {answeredCount} / {questionCount}
+            </span>
             <span>当前 {activeQuestionId || "--"}</span>
           </div>
           <div className="exam-nav-grid">
             {record.quiz.questions.map((question, index) => {
               const value = answers[question.id];
-              const answered = typeof value === "string" ? value.trim().length > 0 : Array.isArray(value) ? value.length > 0 : false;
+              const answered =
+                typeof value === "string"
+                  ? value.trim().length > 0
+                  : Array.isArray(value)
+                    ? value.length > 0
+                    : false;
               const active = activeQuestionId === question.id;
               return (
-                <button key={question.id} className={`exam-nav-button ${answered ? "is-answered" : ""} ${active ? "is-active" : ""}`} onClick={() => jumpToQuestion(index)}>
+                <button
+                  key={question.id}
+                  className={`exam-nav-button ${answered ? "is-answered" : ""} ${active ? "is-active" : ""}`}
+                  onClick={() => jumpToQuestion(index)}
+                >
                   {String(index + 1).padStart(2, "0")}
                 </button>
               );

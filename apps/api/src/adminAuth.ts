@@ -25,7 +25,7 @@ function signPayload(payload: string) {
 export function issueAdminSession() {
   const payload: AdminSessionPayload = {
     exp: Date.now() + config.adminSessionTtlHours * 60 * 60 * 1000,
-    nonce: randomUUID()
+    nonce: randomUUID(),
   };
 
   const encodedPayload = encodeBase64Url(JSON.stringify(payload));
@@ -33,7 +33,7 @@ export function issueAdminSession() {
 
   return {
     token: `${encodedPayload}.${signature}`,
-    expiresAt: payload.exp
+    expiresAt: payload.exp,
   };
 }
 
@@ -60,8 +60,14 @@ export function verifyAdminSession(token: string | undefined) {
   }
 
   try {
-    const payload = JSON.parse(decodeBase64Url(encodedPayload)) as Partial<AdminSessionPayload>;
-    return typeof payload.exp === "number" && payload.exp > Date.now() && typeof payload.nonce === "string";
+    const payload = JSON.parse(
+      decodeBase64Url(encodedPayload),
+    ) as Partial<AdminSessionPayload>;
+    return (
+      typeof payload.exp === "number" &&
+      payload.exp > Date.now() &&
+      typeof payload.nonce === "string"
+    );
   } catch {
     return false;
   }

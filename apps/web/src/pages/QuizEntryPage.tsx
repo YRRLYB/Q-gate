@@ -8,6 +8,24 @@ import { preloadImages } from "../utils/preload";
 
 const RESTART_NOTICE_KEY = "mqg_restart_notice";
 
+function explainStartError(error: unknown) {
+  const message = error instanceof Error ? error.message : "start_failed";
+
+  if (message === "attempt_in_progress") {
+    return "检测到你还有一场未完成的答题，本次入口会优先恢复原会话；如果仍无法进入，请联系管理员处理。";
+  }
+
+  if (message.includes("为防止反复试错")) {
+    return message;
+  }
+
+  if (message.includes("最多只能完成")) {
+    return message;
+  }
+
+  return message;
+}
+
 export function QuizEntryPage() {
   const { slug = "" } = useParams();
   const location = useLocation();
@@ -23,8 +41,9 @@ export function QuizEntryPage() {
   const [error, setError] = useState("");
   const { settings } = useSiteSettings();
   const heroImage = useMemo(
-    () => `${settings.media.entryHeroImage}${settings.media.entryHeroImage.includes("?") ? "&" : "?"}t=${Date.now()}`,
-    [settings.media.entryHeroImage]
+    () =>
+      `${settings.media.entryHeroImage}${settings.media.entryHeroImage.includes("?") ? "&" : "?"}t=${Date.now()}`,
+    [settings.media.entryHeroImage],
   );
 
   useEffect(() => {
@@ -64,15 +83,27 @@ export function QuizEntryPage() {
     }
 
     if (fromQuery === "security") {
-      setError("本次作答的安全校验触发次数已达上限，请重新绑定后再次开始答题。");
+      setError(
+        "本次作答的安全校验触发次数已达上限，请重新绑定后再次开始答题。",
+      );
     }
   }, [location.search]);
 
   const normalizedQq = qq.trim();
   const normalizedPlayerName = playerName.trim();
-  const validQq = useMemo(() => /^[1-9]\d{4,11}$/.test(normalizedQq), [normalizedQq]);
-  const avatarUrl = validQq ? `https://q1.qlogo.cn/g?b=qq&nk=${normalizedQq}&s=640` : "";
-  const canStart = validQq && normalizedPlayerName.length >= 3 && confirmAvatar && confirmPrivacy && !submitting;
+  const validQq = useMemo(
+    () => /^[1-9]\d{4,11}$/.test(normalizedQq),
+    [normalizedQq],
+  );
+  const avatarUrl = validQq
+    ? `https://q1.qlogo.cn/g?b=qq&nk=${normalizedQq}&s=640`
+    : "";
+  const canStart =
+    validQq &&
+    normalizedPlayerName.length >= 3 &&
+    confirmAvatar &&
+    confirmPrivacy &&
+    !submitting;
 
   async function handleStart() {
     if (!canStart) {
@@ -82,25 +113,34 @@ export function QuizEntryPage() {
     try {
       setSubmitting(true);
       setError("");
-      const started = await api.startAttempt({ quizSlug: slug, qq: normalizedQq, playerName: normalizedPlayerName });
+      const started = await api.startAttempt({
+        quizSlug: slug,
+        qq: normalizedQq,
+        playerName: normalizedPlayerName,
+      });
       const record: SessionRecord = {
         attemptId: started.attemptId,
         quiz: started.quiz,
-        playerName: normalizedPlayerName,
+        playerName: started.playerName,
         qq: normalizedQq,
-        startedAt: Date.now()
+        startedAt: new Date(started.startedAt).getTime(),
       };
-      sessionStorage.setItem(sessionKey(started.attemptId), JSON.stringify(record));
+      sessionStorage.setItem(
+        sessionKey(started.attemptId),
+        JSON.stringify(record),
+      );
       navigate(`/quiz/${slug}/session/${started.attemptId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "start_failed");
+      setError(explainStartError(err));
     } finally {
       setSubmitting(false);
     }
   }
 
   if (loading || !heroReady) {
-    return <LoadingStage label="ENTRY / PRELOAD" hint={settings.entry.loadingHint} />;
+    return (
+      <LoadingStage label="ENTRY / PRELOAD" hint={settings.entry.loadingHint} />
+    );
   }
 
   return (
@@ -147,21 +187,46 @@ export function QuizEntryPage() {
                   <div className="binding-form-column">
                     <label className="field field-qq-main">
                       <span>QQ 号</span>
-                      <input value={qq} onChange={(event) => setQq(event.target.value)} placeholder="例如 123456789" inputMode="numeric" />
-                      <small className="field-hint">这个 QQ 会作为进群申请的校验依据，填错会导致验证码无法用于你的申请。</small>
+                      <input
+                        value={qq}
+                        onChange={(event) => setQq(event.target.value)}
+                        placeholder="例如 123456789"
+                        inputMode="numeric"
+                      />
+                      <small className="field-hint">
+                        这个 QQ
+                        会作为进群申请的校验依据，填错会导致验证码无法用于你的申请。
+                      </small>
                     </label>
 
-                    <div className={`avatar-card inline-avatar-card ${validQq ? "is-ready" : ""}`}>
+                    <div
+                      className={`avatar-card inline-avatar-card ${validQq ? "is-ready" : ""}`}
+                    >
                       <div className="avatar-card-head entry-avatar-head-simple">
-                        <strong>{validQq ? "QQ 头像实时预览" : "输入 QQ 后会在这里实时显示头像"}</strong>
-                        <p>{validQq ? `请确认 ${normalizedQq} 就是你准备进群申请时使用的 QQ。` : "头像会跟随 QQ 输入实时更新，确认无误后再继续。"}</p>
+                        <strong>
+                          {validQq
+                            ? "QQ 头像实时预览"
+                            : "输入 QQ 后会在这里实时显示头像"}
+                        </strong>
+                        <p>
+                          {validQq
+                            ? `请确认 ${normalizedQq} 就是你准备进群申请时使用的 QQ。`
+                            : "头像会跟随 QQ 输入实时更新，确认无误后再继续。"}
+                        </p>
                       </div>
                       {validQq ? (
                         <div className="entry-avatar-focus inline-avatar-focus">
-                          <img src={avatarUrl} alt="QQ 头像预览" className="avatar-preview inline-avatar-image" loading="eager" />
+                          <img
+                            src={avatarUrl}
+                            alt="QQ 头像预览"
+                            className="avatar-preview inline-avatar-image"
+                            loading="eager"
+                          />
                           <div className="entry-avatar-copy entry-avatar-copy-balanced inline-avatar-copy">
                             <p>QQ：{normalizedQq}</p>
-                            <p className="muted">确认无误后勾选下方确认项再开始。</p>
+                            <p className="muted">
+                              确认无误后勾选下方确认项再开始。
+                            </p>
                           </div>
                         </div>
                       ) : null}
@@ -169,14 +234,26 @@ export function QuizEntryPage() {
 
                     <label className="field field-player-main">
                       <span>Minecraft 用户名</span>
-                      <input value={playerName} onChange={(event) => setPlayerName(event.target.value)} placeholder="例如 MyPlayer" />
-                      <small className="field-hint">建议填写你实际申请入服时会使用的游戏账号。</small>
+                      <input
+                        value={playerName}
+                        onChange={(event) => setPlayerName(event.target.value)}
+                        placeholder="例如 MyPlayer"
+                      />
+                      <small className="field-hint">
+                        建议填写你实际申请入服时会使用的游戏账号。
+                      </small>
                     </label>
                   </div>
 
                   <aside className="binding-visual-column">
                     <div className="entry-side-visual entry-side-visual-refined entry-side-visual-inline framed-media-card">
-                      <img src={heroImage} alt="Q-gate 社区氛围插画" className="hero-side-image" loading="eager" fetchPriority="high" />
+                      <img
+                        src={heroImage}
+                        alt="Q-gate 社区氛围插画"
+                        className="hero-side-image"
+                        loading="eager"
+                        fetchPriority="high"
+                      />
                     </div>
                     <div className="warning-box floating-panel entry-side-note entry-side-note-inline">
                       <strong>{settings.entry.warning.title}</strong>
@@ -187,11 +264,24 @@ export function QuizEntryPage() {
 
                 <div className="consent-list consent-list-entry">
                   <label className="checkbox-row checkbox-row-polished">
-                    <input type="checkbox" checked={confirmAvatar} onChange={(event) => setConfirmAvatar(event.target.checked)} disabled={!validQq} />
+                    <input
+                      type="checkbox"
+                      checked={confirmAvatar}
+                      onChange={(event) =>
+                        setConfirmAvatar(event.target.checked)
+                      }
+                      disabled={!validQq}
+                    />
                     <span>{settings.entry.confirmAvatar}</span>
                   </label>
                   <label className="checkbox-row checkbox-row-polished">
-                    <input type="checkbox" checked={confirmPrivacy} onChange={(event) => setConfirmPrivacy(event.target.checked)} />
+                    <input
+                      type="checkbox"
+                      checked={confirmPrivacy}
+                      onChange={(event) =>
+                        setConfirmPrivacy(event.target.checked)
+                      }
+                    />
                     <span>{settings.entry.confirmPrivacy}</span>
                   </label>
                 </div>
@@ -201,8 +291,14 @@ export function QuizEntryPage() {
                   <p>{settings.entry.bindingNote.body}</p>
                 </div>
 
-                <button className="primary-button primary-button-entry" disabled={!canStart} onClick={handleStart}>
-                  {submitting ? "正在创建答题会话…" : settings.entry.startButton}
+                <button
+                  className="primary-button primary-button-entry"
+                  disabled={!canStart}
+                  onClick={handleStart}
+                >
+                  {submitting
+                    ? "正在创建答题会话…"
+                    : settings.entry.startButton}
                 </button>
               </div>
             </div>

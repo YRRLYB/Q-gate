@@ -30,7 +30,9 @@ function fireAndForget(target: PreloadTarget) {
     return;
   }
 
-  const element = document.createElement(target.type === "audio" ? "audio" : "video");
+  const element = document.createElement(
+    target.type === "audio" ? "audio" : "video",
+  );
   element.preload = "auto";
   element.src = target.url;
   element.load();
@@ -63,7 +65,9 @@ function preloadOnce(target: PreloadTarget) {
       return;
     }
 
-    const element = document.createElement(target.type === "audio" ? "audio" : "video");
+    const element = document.createElement(
+      target.type === "audio" ? "audio" : "video",
+    );
     element.preload = "auto";
     element.onloadeddata = () => finish(true);
     element.oncanplaythrough = () => finish(true);
@@ -80,7 +84,7 @@ async function preloadTarget(target: PreloadTarget): Promise<PreloadOutcome> {
       return {
         loaded: true,
         forced: false,
-        retried: attempt > 0
+        retried: attempt > 0,
       };
     }
   }
@@ -89,22 +93,26 @@ async function preloadTarget(target: PreloadTarget): Promise<PreloadOutcome> {
   return {
     loaded: false,
     forced: true,
-    retried: true
+    retried: true,
   };
 }
 
-async function preloadTargets(targets: PreloadTarget[]): Promise<PreloadSummary> {
+async function preloadTargets(
+  targets: PreloadTarget[],
+): Promise<PreloadSummary> {
   const validTargets = targets.filter((target) => target.url.trim().length > 0);
   if (validTargets.length === 0) {
     return { total: 0, loaded: 0, forced: 0, retried: 0 };
   }
 
-  const results = await Promise.all(validTargets.map((target) => preloadTarget(target)));
+  const results = await Promise.all(
+    validTargets.map((target) => preloadTarget(target)),
+  );
   return {
     total: validTargets.length,
     loaded: results.filter((item) => item.loaded).length,
     forced: results.filter((item) => item.forced).length,
-    retried: results.filter((item) => item.retried).length
+    retried: results.filter((item) => item.retried).length,
   };
 }
 

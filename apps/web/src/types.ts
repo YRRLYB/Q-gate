@@ -51,6 +51,16 @@ export type PublicQuiz = {
 
 export type StartAttemptResponse = {
   attemptId: string;
+  playerName: string;
+  startedAt: string;
+  resumed: boolean;
+  quiz: PublicQuiz;
+};
+
+export type ResumeAttemptResponse = {
+  attemptId: string;
+  playerName: string;
+  startedAt: string;
   quiz: PublicQuiz;
 };
 
@@ -70,7 +80,6 @@ export type SubmitResponse = {
     earnedPoints: number;
     points: number;
     submittedAnswer: string;
-    correctAnswer: string;
   }>;
 };
 
@@ -82,9 +91,22 @@ export type SessionRecord = {
   startedAt: number;
 };
 
+export type AdminBindingItem = {
+  attemptId: string;
+  quizSlug: string;
+  quizTitle: string;
+  qqMask?: string | null;
+  playerName: string;
+  submittedAt: string;
+  score: number | null;
+  verificationStatus: "issued" | "consumed" | null;
+  hasAvatar: boolean;
+};
+
 export type SiteSettings = {
   brand: {
     name: string;
+    releaseVersion: string;
     systemText: string;
     adminName: string;
     repoUrl: string;
@@ -116,6 +138,8 @@ export type SiteSettings = {
     flowSteps: [string, string, string];
     warning: { title: string; body: string };
     bindingNote: { title: string; body: string };
+    boundNotice: { title: string; body: string };
+    boundContact: string;
     confirmAvatar: string;
     confirmPrivacy: string;
   };

@@ -32,7 +32,9 @@ function nextTheme(theme: UiTheme): UiTheme {
 function ShellHeader({ showNav = true }: { showNav?: boolean }) {
   const [theme, setTheme] = useUiTheme();
   const [isAnimating, setIsAnimating] = useState(false);
-  const [transitionPhase, setTransitionPhase] = useState<"idle" | "launch" | "settle">("idle");
+  const [transitionPhase, setTransitionPhase] = useState<
+    "idle" | "launch" | "settle"
+  >("idle");
   const [overlayTheme, setOverlayTheme] = useState<UiTheme>(theme);
   const { settings } = useSiteSettings();
   const timerRefs = useRef<number[]>([]);
@@ -58,15 +60,22 @@ function ShellHeader({ showNav = true }: { showNav?: boolean }) {
     setIsAnimating(true);
     setTransitionPhase("launch");
 
-    timerRefs.current.push(window.setTimeout(() => {
-      setTheme(targetTheme);
-      setTransitionPhase("settle");
-    }, Math.round(THEME_ANIMATION_MS * 0.52)));
+    timerRefs.current.push(
+      window.setTimeout(
+        () => {
+          setTheme(targetTheme);
+          setTransitionPhase("settle");
+        },
+        Math.round(THEME_ANIMATION_MS * 0.52),
+      ),
+    );
 
-    timerRefs.current.push(window.setTimeout(() => {
-      setTransitionPhase("idle");
-      setIsAnimating(false);
-    }, THEME_ANIMATION_MS + 260));
+    timerRefs.current.push(
+      window.setTimeout(() => {
+        setTransitionPhase("idle");
+        setIsAnimating(false);
+      }, THEME_ANIMATION_MS + 260),
+    );
   }
 
   return (
@@ -75,12 +84,20 @@ function ShellHeader({ showNav = true }: { showNav?: boolean }) {
         <div className="topbar-inner">
           <Link to="/" className="brand">
             <span className="brand-mark" />
-            {settings.brand.name}
+            <span className="brand-label">{settings.brand.name}</span>
+            <span className="brand-version">
+              {settings.brand.releaseVersion}
+            </span>
           </Link>
           <div className="topbar-actions">
             {showNav ? (
               <nav className="topnav" aria-label="页面导航">
-                <Link to="/" className="icon-button topnav-home" title="返回首页" aria-label="返回首页">
+                <Link
+                  to="/"
+                  className="icon-button topnav-home"
+                  title="返回首页"
+                  aria-label="返回首页"
+                >
                   <span aria-hidden="true">⌂</span>
                 </Link>
               </nav>
@@ -92,7 +109,9 @@ function ShellHeader({ showNav = true }: { showNav?: boolean }) {
               className={`icon-button theme-toggle ${isAnimating ? "is-animating" : ""}`}
               onClick={handleThemeToggle}
             >
-              <span className="theme-toggle-core" aria-hidden="true">{themeIcon}</span>
+              <span className="theme-toggle-core" aria-hidden="true">
+                {themeIcon}
+              </span>
               <span className="theme-toggle-wave" aria-hidden="true" />
             </button>
             <a
@@ -129,7 +148,7 @@ export function Frame({
   aside,
   copyExtra,
   heroClassName,
-  children
+  children,
 }: {
   eyebrow: string;
   title: string;
@@ -143,17 +162,26 @@ export function Frame({
 
   return (
     <div className="page-shell">
-      <div className="bg-text-layer" aria-hidden="true">{settings.brand.systemText}</div>
+      <div className="bg-text-layer" aria-hidden="true">
+        {settings.brand.systemText}
+      </div>
       <div className="background-grid" />
       <ShellHeader />
 
       <main className="page-content">
         <section className={`hero-panel ${heroClassName ?? ""}`.trim()}>
           <div className="hero-copy">
-            <span className="eyebrow"><span aria-hidden="true" style={{color: 'var(--accent)'}}>{'//'} </span>{eyebrow}</span>
+            <span className="eyebrow">
+              <span aria-hidden="true" style={{ color: "var(--accent)" }}>
+                {"//"}{" "}
+              </span>
+              {eyebrow}
+            </span>
             <h1 data-text={title}>{title}</h1>
             <p>{subtitle}</p>
-            {copyExtra ? <div className="hero-copy-extra">{copyExtra}</div> : null}
+            {copyExtra ? (
+              <div className="hero-copy-extra">{copyExtra}</div>
+            ) : null}
           </div>
           {aside ? <div className="hero-aside">{aside}</div> : null}
         </section>
@@ -164,7 +192,17 @@ export function Frame({
 }
 
 export function StatusPill({ label }: { label: string }) {
-  return <span className="status-pill"><span aria-hidden="true" style={{opacity: 0.5}}>{'['}</span>{label}<span aria-hidden="true" style={{opacity: 0.5}}>{']'}</span></span>;
+  return (
+    <span className="status-pill">
+      <span aria-hidden="true" style={{ opacity: 0.5 }}>
+        {"["}
+      </span>
+      {label}
+      <span aria-hidden="true" style={{ opacity: 0.5 }}>
+        {"]"}
+      </span>
+    </span>
+  );
 }
 
 export function LoadingStage({ label, hint }: { label: string; hint: string }) {

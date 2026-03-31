@@ -1,5 +1,6 @@
 brand:
   name: Q-gate
+  releaseVersion: v1.1
   systemText: COMMUNITY ACCESS SYSTEM
   adminName: Q-gate Studio
   repoUrl: https://github.com/YRRLYB/Q-gate
@@ -48,6 +49,10 @@ entry:
   bindingNote:
     title: 绑定说明
     body: Q-gate 会把这次答题结果与你填写的 QQ 和游戏名对应起来，用来判断进群申请里填写的验证码是不是你的。请务必填写真正要申请使用的账号。
+  boundNotice:
+    title: 该身份已经绑定过
+    body: 这个 QQ 或 Minecraft 用户名 已经完成过绑定，不能再次答题。
+  boundContact: 如果绑定信息有误，请联系审核管理员处理。
   confirmAvatar: 我已确认当前 QQ 头像和号码，就是这次准备用于进群申请的账户。
   confirmPrivacy: 我已知晓本页填写的 QQ 与游戏名会用于绑定本次答题结果，并用于后续验证码归属校验。
 
@@ -59,7 +64,7 @@ session:
   lostSubtitle: 浏览器里没有找到这次答题记录，请返回上一页重新开始。
   lostBackLabel: 返回重新绑定
   navTitle: 题号导航
-  submitHint: 提交后会显示总分、错题、你的答案和参考正确答案。
+  submitHint: 提交后会显示总分、错题和你的作答记录；参考答案不会在结果页公开显示。
   submitButton: 提交并判分
   fullscreenTitle: 当前题库要求全屏作答
   fullscreenBody: 未进入全屏前无法开始答题；中途切出页面或退出全屏时，系统会直接整屏警告并记录次数。
@@ -71,7 +76,7 @@ result:
   passTitle: 答题通过
   failTitle: 本次未通过
   passSubtitle: 接下来把验证码填写到进群申请问题里，或者交给群内 bot 校验。错题解析可以按需展开查看。
-  failSubtitle: 这次先把错题和正确答案过一遍，再重新开一轮会更稳。
+  failSubtitle: 这次先把错题和你的作答记录过一遍，冷却结束后再重新开一轮会更稳。
   copyButton: 复制验证码
   copiedButton: 已复制
   homeButton: 返回首页

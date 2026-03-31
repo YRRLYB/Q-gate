@@ -1,14 +1,14 @@
-
 import { useEffect, useMemo, useState } from "react";
 import YAML from "yaml";
-import { api } from "../api";
+import { api, apiAssetUrl } from "../api";
 import { starterQuizTemplate } from "../data/quizTemplate";
 import { Frame, StatusPill } from "../layout";
 import { useSiteSettings } from "../site";
+import type { AdminBindingItem } from "../types";
 
 type FeedbackTone = "neutral" | "success" | "error";
 type EditorMode = "visual" | "yaml";
-type StudioSection = "quiz" | "site";
+type StudioSection = "quiz" | "site" | "bindings";
 type QuestionType = "single" | "multiple" | "text";
 type QuestionGroup = "objective" | "subjective";
 type TextInputStyle = "short" | "essay";
@@ -97,14 +97,14 @@ function createQuestion(type: QuestionType, index: number): EditorQuestion {
     placeholder: "",
     inputStyle: "essay",
     options: [],
-    answer: []
+    answer: [],
   };
 
   if (type === "text") {
     return {
       ...base,
       placeholder: "请输入答案关键词或简答内容",
-      answer: [""]
+      answer: [""],
     };
   }
 
@@ -113,41 +113,58 @@ function createQuestion(type: QuestionType, index: number): EditorQuestion {
     inputStyle: "short",
     options: [0, 1, 2, 3].map((item) => ({
       key: toOptionKey(item),
-      text: ""
+      text: "",
     })),
-    answer: type === "single" ? ["A"] : []
+    answer: type === "single" ? ["A"] : [],
   };
 }
 
 function normalizeQuestion(raw: any, index: number): EditorQuestion {
-  const type: QuestionType = raw?.type === "multiple" || raw?.type === "text" ? raw.type : "single";
+  const type: QuestionType =
+    raw?.type === "multiple" || raw?.type === "text" ? raw.type : "single";
   const options = Array.isArray(raw?.options)
     ? raw.options.map((option: any, optionIndex: number) => ({
         key: String(option?.key ?? toOptionKey(optionIndex)),
-        text: String(option?.text ?? "")
+        text: String(option?.text ?? ""),
       }))
     : [];
-  const answer = Array.isArray(raw?.answer) ? raw.answer.map((item: unknown) => String(item ?? "")) : [];
-  const media = raw?.media && typeof raw.media === "object"
-    ? {
-        type: raw.media.type === "audio" || raw.media.type === "video" ? raw.media.type : "image",
-        url: String(raw.media.url ?? ""),
-        caption: String(raw.media.caption ?? "")
-      }
-    : undefined;
+  const answer = Array.isArray(raw?.answer)
+    ? raw.answer.map((item: unknown) => String(item ?? ""))
+    : [];
+  const media =
+    raw?.media && typeof raw.media === "object"
+      ? {
+          type:
+            raw.media.type === "audio" || raw.media.type === "video"
+              ? raw.media.type
+              : "image",
+          url: String(raw.media.url ?? ""),
+          caption: String(raw.media.caption ?? ""),
+        }
+      : undefined;
 
   return {
     id: String(raw?.id ?? `rule_${String(index + 1).padStart(2, "0")}`),
     type,
-    group: raw?.group === "subjective" ? "subjective" : raw?.group === "objective" ? "objective" : getDefaultGroup(type),
+    group:
+      raw?.group === "subjective"
+        ? "subjective"
+        : raw?.group === "objective"
+          ? "objective"
+          : getDefaultGroup(type),
     points: Number(raw?.points ?? 10),
     prompt: String(raw?.prompt ?? ""),
     description: String(raw?.description ?? ""),
     placeholder: String(raw?.placeholder ?? ""),
     inputStyle: raw?.inputStyle === "short" ? "short" : "essay",
     media: media?.url ? media : undefined,
-    options: type === "text" ? [] : options.length > 0 ? options : createQuestion(type, index).options,
-    answer: answer.length > 0 ? answer : createQuestion(type, index).answer
+    options:
+      type === "text"
+        ? []
+        : options.length > 0
+          ? options
+          : createQuestion(type, index).options,
+    answer: answer.length > 0 ? answer : createQuestion(type, index).answer,
   };
 }
 
@@ -159,7 +176,9 @@ function parseEditorQuiz(source: string): EditorQuiz {
   }
 
   const questions = Array.isArray(raw.questions)
-    ? raw.questions.map((question: any, index: number) => normalizeQuestion(question, index))
+    ? raw.questions.map((question: any, index: number) =>
+        normalizeQuestion(question, index),
+      )
     : [];
 
   return {
@@ -171,15 +190,22 @@ function parseEditorQuiz(source: string): EditorQuiz {
       passScore: Number(raw.meta?.passScore ?? 70),
       durationSec: Number(raw.meta?.durationSec ?? 900),
       shuffleQuestions: Boolean(raw.meta?.shuffleQuestions),
-      examMode: raw.meta?.examMode === "open_book" ? "open_book" : "closed_book",
+      examMode:
+        raw.meta?.examMode === "open_book" ? "open_book" : "closed_book",
       requireFullscreen: Boolean(raw.meta?.requireFullscreen),
       selectionMode: raw.meta?.selectionMode === "random" ? "random" : "fixed",
       drawCount: sanitizeOptionalCount(Number(raw.meta?.drawCount ?? 0)),
-      drawSingleCount: sanitizeOptionalCount(Number(raw.meta?.drawSingleCount ?? 0)),
-      drawMultipleCount: sanitizeOptionalCount(Number(raw.meta?.drawMultipleCount ?? 0)),
-      drawTextCount: sanitizeOptionalCount(Number(raw.meta?.drawTextCount ?? 0))
+      drawSingleCount: sanitizeOptionalCount(
+        Number(raw.meta?.drawSingleCount ?? 0),
+      ),
+      drawMultipleCount: sanitizeOptionalCount(
+        Number(raw.meta?.drawMultipleCount ?? 0),
+      ),
+      drawTextCount: sanitizeOptionalCount(
+        Number(raw.meta?.drawTextCount ?? 0),
+      ),
     },
-    questions: questions.length > 0 ? questions : [createQuestion("single", 0)]
+    questions: questions.length > 0 ? questions : [createQuestion("single", 0)],
   };
 }
 
@@ -190,18 +216,31 @@ function toYamlDocument(editor: EditorQuiz) {
     meta: {
       slug: editor.meta.slug,
       title: editor.meta.title,
-      ...(editor.meta.subtitle.trim() ? { subtitle: editor.meta.subtitle.trim() } : {}),
-      ...(editor.meta.description.trim() ? { description: editor.meta.description.trim() } : {}),
+      ...(editor.meta.subtitle.trim()
+        ? { subtitle: editor.meta.subtitle.trim() }
+        : {}),
+      ...(editor.meta.description.trim()
+        ? { description: editor.meta.description.trim() }
+        : {}),
       passScore: editor.meta.passScore,
       durationSec: editor.meta.durationSec,
       shuffleQuestions: editor.meta.shuffleQuestions,
       examMode: editor.meta.examMode,
       requireFullscreen: editor.meta.requireFullscreen,
       selectionMode: editor.meta.selectionMode,
-      ...(editor.meta.selectionMode === "random" && editor.meta.drawCount ? { drawCount: editor.meta.drawCount } : {}),
-      ...(editor.meta.selectionMode === "random" && editor.meta.drawSingleCount ? { drawSingleCount: editor.meta.drawSingleCount } : {}),
-      ...(editor.meta.selectionMode === "random" && editor.meta.drawMultipleCount ? { drawMultipleCount: editor.meta.drawMultipleCount } : {}),
-      ...(editor.meta.selectionMode === "random" && editor.meta.drawTextCount ? { drawTextCount: editor.meta.drawTextCount } : {})
+      ...(editor.meta.selectionMode === "random" && editor.meta.drawCount
+        ? { drawCount: editor.meta.drawCount }
+        : {}),
+      ...(editor.meta.selectionMode === "random" && editor.meta.drawSingleCount
+        ? { drawSingleCount: editor.meta.drawSingleCount }
+        : {}),
+      ...(editor.meta.selectionMode === "random" &&
+      editor.meta.drawMultipleCount
+        ? { drawMultipleCount: editor.meta.drawMultipleCount }
+        : {}),
+      ...(editor.meta.selectionMode === "random" && editor.meta.drawTextCount
+        ? { drawTextCount: editor.meta.drawTextCount }
+        : {}),
     },
     questions: editor.questions.map((question) => {
       const base = {
@@ -210,24 +249,32 @@ function toYamlDocument(editor: EditorQuiz) {
         group: question.group,
         points: question.points,
         prompt: question.prompt,
-        ...(question.description.trim() ? { description: question.description.trim() } : {}),
-        ...(question.type === "text" && question.placeholder.trim() ? { placeholder: question.placeholder.trim() } : {}),
-        ...(question.type === "text" ? { inputStyle: question.inputStyle } : {}),
+        ...(question.description.trim()
+          ? { description: question.description.trim() }
+          : {}),
+        ...(question.type === "text" && question.placeholder.trim()
+          ? { placeholder: question.placeholder.trim() }
+          : {}),
+        ...(question.type === "text"
+          ? { inputStyle: question.inputStyle }
+          : {}),
         ...(question.media?.url.trim()
           ? {
               media: {
                 type: question.media.type,
                 url: question.media.url.trim(),
-                ...(question.media.caption.trim() ? { caption: question.media.caption.trim() } : {})
-              }
+                ...(question.media.caption.trim()
+                  ? { caption: question.media.caption.trim() }
+                  : {}),
+              },
             }
-          : {})
+          : {}),
       };
 
       if (question.type === "text") {
         return {
           ...base,
-          answer: question.answer.map((item) => item.trim()).filter(Boolean)
+          answer: question.answer.map((item) => item.trim()).filter(Boolean),
         };
       }
 
@@ -235,11 +282,11 @@ function toYamlDocument(editor: EditorQuiz) {
         ...base,
         options: question.options.map((option, index) => ({
           key: option.key.trim() || toOptionKey(index),
-          text: option.text
+          text: option.text,
         })),
-        answer: question.answer.map((item) => item.trim()).filter(Boolean)
+        answer: question.answer.map((item) => item.trim()).filter(Boolean),
       };
-    })
+    }),
   };
 }
 
@@ -264,9 +311,15 @@ function getSelectionPreview(meta: EditorQuiz["meta"], questionCount: number) {
     return `固定整卷 · ${questionCount} 题`;
   }
 
-  const total = meta.drawCount ?? [meta.drawSingleCount ?? 0, meta.drawMultipleCount ?? 0, meta.drawTextCount ?? 0]
-    .filter((count) => count > 0)
-    .reduce((sum, count) => sum + count, 0);
+  const total =
+    meta.drawCount ??
+    [
+      meta.drawSingleCount ?? 0,
+      meta.drawMultipleCount ?? 0,
+      meta.drawTextCount ?? 0,
+    ]
+      .filter((count) => count > 0)
+      .reduce((sum, count) => sum + count, 0);
 
   return total > 0 ? `随机抽题 · ${total} 题` : "随机抽题";
 }
@@ -279,16 +332,28 @@ function getSiteSettingsPreview(source: string) {
         brandName: String(raw?.brand?.name ?? ""),
         adminName: String(raw?.brand?.adminName ?? ""),
         homeTitle: String(raw?.home?.title ?? ""),
-        entryTitle: String(raw?.entry?.fallbackTitle ?? "")
+        entryTitle: String(raw?.entry?.fallbackTitle ?? ""),
       },
-      error: ""
+      error: "",
     };
   } catch (err) {
     return {
       data: null,
-      error: err instanceof Error ? err.message : "YAML 解析失败"
+      error: err instanceof Error ? err.message : "YAML 解析失败",
     };
   }
+}
+
+function getBindingStatusLabel(status: AdminBindingItem["verificationStatus"]) {
+  return status === "consumed"
+    ? "验证码已核销"
+    : status === "issued"
+      ? "已发码待核销"
+      : "状态未知";
+}
+
+function getBindingAvatarUrl(item: AdminBindingItem) {
+  return apiAssetUrl(`/admin/bindings/${item.attemptId}/avatar`);
 }
 
 export function StudioPage() {
@@ -299,13 +364,23 @@ export function StudioPage() {
   const [section, setSection] = useState<StudioSection>("quiz");
   const [mode, setMode] = useState<EditorMode>("visual");
   const [editor, setEditor] = useState<EditorQuiz>(VISUAL_TEMPLATE);
-  const [yamlText, setYamlText] = useState(stringifyEditorQuiz(VISUAL_TEMPLATE));
+  const [yamlText, setYamlText] = useState(
+    stringifyEditorQuiz(VISUAL_TEMPLATE),
+  );
   const [siteYamlText, setSiteYamlText] = useState("");
   const [feedback, setFeedback] = useState("");
   const [feedbackTone, setFeedbackTone] = useState<FeedbackTone>("neutral");
-  const [quizItems, setQuizItems] = useState<Array<{ slug: string; title: string; updatedAt?: string }>>([]);
+  const [quizItems, setQuizItems] = useState<
+    Array<{ slug: string; title: string; updatedAt?: string }>
+  >([]);
+  const [bindingItems, setBindingItems] = useState<AdminBindingItem[]>([]);
   const [autoLoadedContent, setAutoLoadedContent] = useState(false);
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
+  const [deletingBindingId, setDeletingBindingId] = useState<string | null>(
+    null,
+  );
+  const [pendingDeleteBinding, setPendingDeleteBinding] =
+    useState<AdminBindingItem | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -341,15 +416,42 @@ export function StudioPage() {
     try {
       return { data: parseEditorQuiz(yamlText), error: "" };
     } catch (err) {
-      return { data: null, error: err instanceof Error ? err.message : "YAML 解析失败" };
+      return {
+        data: null,
+        error: err instanceof Error ? err.message : "YAML 解析失败",
+      };
     }
   }, [yamlText]);
 
   const preview = previewResult.data;
-  const sitePreviewResult = useMemo(() => getSiteSettingsPreview(siteYamlText), [siteYamlText]);
-  const totalPoints = useMemo(() => editor.questions.reduce((sum, question) => sum + Number(question.points || 0), 0), [editor.questions]);
-  const objectiveCount = useMemo(() => editor.questions.filter((question) => question.group === "objective").length, [editor.questions]);
-  const subjectiveCount = useMemo(() => editor.questions.filter((question) => question.group === "subjective").length, [editor.questions]);
+  const sitePreviewResult = useMemo(
+    () => getSiteSettingsPreview(siteYamlText),
+    [siteYamlText],
+  );
+  const totalPoints = useMemo(
+    () =>
+      editor.questions.reduce(
+        (sum, question) => sum + Number(question.points || 0),
+        0,
+      ),
+    [editor.questions],
+  );
+  const objectiveCount = useMemo(
+    () =>
+      editor.questions.filter((question) => question.group === "objective")
+        .length,
+    [editor.questions],
+  );
+  const subjectiveCount = useMemo(
+    () =>
+      editor.questions.filter((question) => question.group === "subjective")
+        .length,
+    [editor.questions],
+  );
+  const latestBindings = useMemo(
+    () => bindingItems.slice(0, 8),
+    [bindingItems],
+  );
 
   function updateFeedback(text: string, tone: FeedbackTone) {
     setFeedback(text);
@@ -372,7 +474,10 @@ export function StudioPage() {
 
   async function handleAdminLogin() {
     if (!adminPasswordInput.trim()) {
-      updateFeedback("请输入 apps/api/.env 中当前启用的 ADMIN_PASSWORD。", "error");
+      updateFeedback(
+        "请输入 apps/api/.env 中当前启用的 ADMIN_PASSWORD。",
+        "error",
+      );
       return;
     }
 
@@ -399,20 +504,28 @@ export function StudioPage() {
     }
   }
 
-  function updateMeta<K extends keyof EditorQuiz["meta"]>(key: K, value: EditorQuiz["meta"][K]) {
+  function updateMeta<K extends keyof EditorQuiz["meta"]>(
+    key: K,
+    value: EditorQuiz["meta"][K],
+  ) {
     commitEditor({
       ...editor,
       meta: {
         ...editor.meta,
-        [key]: value
-      }
+        [key]: value,
+      },
     });
   }
 
-  function updateQuestion(index: number, updater: (question: EditorQuestion) => EditorQuestion) {
+  function updateQuestion(
+    index: number,
+    updater: (question: EditorQuestion) => EditorQuestion,
+  ) {
     commitEditor({
       ...editor,
-      questions: editor.questions.map((question, questionIndex) => (questionIndex === index ? updater(question) : question))
+      questions: editor.questions.map((question, questionIndex) =>
+        questionIndex === index ? updater(question) : question,
+      ),
     });
   }
 
@@ -429,7 +542,10 @@ export function StudioPage() {
       setMode("visual");
       updateFeedback("YAML 已同步到可视化编辑器。", "success");
     } catch (err) {
-      updateFeedback(err instanceof Error ? err.message : "YAML 解析失败", "error");
+      updateFeedback(
+        err instanceof Error ? err.message : "YAML 解析失败",
+        "error",
+      );
     }
   }
 
@@ -441,10 +557,76 @@ export function StudioPage() {
     try {
       updateFeedback("正在读取服务端题集…", "neutral");
       const payload = await api.listAdminQuizzes();
-      setQuizItems(payload.items.map((item) => ({ slug: item.slug, title: item.title, updatedAt: item.updatedAt })));
+      setQuizItems(
+        payload.items.map((item) => ({
+          slug: item.slug,
+          title: item.title,
+          updatedAt: item.updatedAt,
+        })),
+      );
       updateFeedback(`已读取 ${payload.items.length} 份题集。`, "success");
     } catch (err) {
       updateFeedback(explainAdminError(err, "读取题集"), "error");
+    }
+  }
+
+  async function loadAdminBindings() {
+    if (!ensureAuthenticated()) {
+      return;
+    }
+
+    try {
+      updateFeedback("正在读取已绑定身份…", "neutral");
+      const payload = await api.listAdminBindings();
+      setBindingItems(payload.items);
+      updateFeedback(`已读取 ${payload.items.length} 条绑定记录。`, "success");
+    } catch (err) {
+      updateFeedback(explainAdminError(err, "读取绑定记录"), "error");
+    }
+  }
+
+  function requestDeleteBinding(item: AdminBindingItem) {
+    setPendingDeleteBinding(item);
+  }
+
+  function closeDeleteBindingPrompt() {
+    if (deletingBindingId) {
+      return;
+    }
+
+    setPendingDeleteBinding(null);
+  }
+
+  async function confirmDeleteBinding() {
+    if (!ensureAuthenticated()) {
+      return;
+    }
+
+    if (!pendingDeleteBinding) {
+      return;
+    }
+
+    try {
+      setDeletingBindingId(pendingDeleteBinding.attemptId);
+      updateFeedback(
+        `正在删除 ${pendingDeleteBinding.playerName} 的绑定记录…`,
+        "neutral",
+      );
+      await api.deleteAdminBinding(pendingDeleteBinding.attemptId);
+      setBindingItems((current) =>
+        current.filter(
+          (entry) => entry.attemptId !== pendingDeleteBinding.attemptId,
+        ),
+      );
+      updateFeedback(
+        `已删除 ${pendingDeleteBinding.playerName} 的绑定记录。`,
+        "success",
+      );
+      setPendingDeleteBinding(null);
+    } catch (err) {
+      updateFeedback(explainAdminError(err, "删除绑定记录"), "error");
+    } finally {
+      setDeletingBindingId(null);
     }
   }
 
@@ -467,11 +649,12 @@ export function StudioPage() {
           parseError instanceof Error
             ? `服务端当前 YAML 有格式问题，已切到 YAML 高级模式。${parseError.message}`
             : "服务端当前 YAML 有格式问题，已切到 YAML 高级模式。",
-          "error"
+          "error",
         );
       }
 
       await loadAdminQuizzes();
+      await loadAdminBindings();
     } catch (err) {
       updateFeedback(explainAdminError(err, "读取 YAML"), "error");
     }
@@ -497,7 +680,8 @@ export function StudioPage() {
 
     try {
       updateFeedback("正在发布题集…", "neutral");
-      const safeYaml = mode === "visual" ? stringifyEditorQuiz(editor) : yamlText;
+      const safeYaml =
+        mode === "visual" ? stringifyEditorQuiz(editor) : yamlText;
       if (mode === "visual") {
         setYamlText(safeYaml);
       }
@@ -517,7 +701,10 @@ export function StudioPage() {
     try {
       updateFeedback("正在发布站点文案…", "neutral");
       await api.importSiteSettings(siteYamlText);
-      updateFeedback("站点文案已发布，刷新页面后即可看到最新品牌与文案。", "success");
+      updateFeedback(
+        "站点文案已发布，刷新页面后即可看到最新品牌与文案。",
+        "success",
+      );
     } catch (err) {
       updateFeedback(explainAdminError(err, "发布站点文案"), "error");
     }
@@ -526,15 +713,23 @@ export function StudioPage() {
   function addQuestion(type: QuestionType) {
     commitEditor({
       ...editor,
-      questions: [...editor.questions, createQuestion(type, editor.questions.length)]
+      questions: [
+        ...editor.questions,
+        createQuestion(type, editor.questions.length),
+      ],
     });
   }
 
   function removeQuestion(index: number) {
-    const nextQuestions = editor.questions.filter((_, questionIndex) => questionIndex !== index);
+    const nextQuestions = editor.questions.filter(
+      (_, questionIndex) => questionIndex !== index,
+    );
     commitEditor({
       ...editor,
-      questions: nextQuestions.length > 0 ? nextQuestions : [createQuestion("single", 0)]
+      questions:
+        nextQuestions.length > 0
+          ? nextQuestions
+          : [createQuestion("single", 0)],
     });
   }
 
@@ -545,7 +740,7 @@ export function StudioPage() {
       id: `rule_${String(editor.questions.length + 1).padStart(2, "0")}`,
       media: source.media ? { ...source.media } : undefined,
       options: source.options.map((option) => ({ ...option })),
-      answer: [...source.answer]
+      answer: [...source.answer],
     };
 
     const nextQuestions = [...editor.questions];
@@ -558,8 +753,8 @@ export function StudioPage() {
       ...editor,
       questions: editor.questions.map((question, index) => ({
         ...question,
-        id: `rule_${String(index + 1).padStart(2, "0")}`
-      }))
+        id: `rule_${String(index + 1).padStart(2, "0")}`,
+      })),
     });
     updateFeedback("题目 ID 已按顺序重新编号。", "success");
   }
@@ -581,7 +776,7 @@ export function StudioPage() {
           remainder -= 1;
         }
         return { ...question, points: base + extra };
-      })
+      }),
     });
     updateFeedback("已按总分 100 自动均分到当前题目。", "success");
   }
@@ -593,7 +788,10 @@ export function StudioPage() {
     }
 
     const nextQuestions = [...editor.questions];
-    [nextQuestions[index], nextQuestions[target]] = [nextQuestions[target], nextQuestions[index]];
+    [nextQuestions[index], nextQuestions[target]] = [
+      nextQuestions[target],
+      nextQuestions[index],
+    ];
     commitEditor({ ...editor, questions: nextQuestions });
   }
 
@@ -607,7 +805,7 @@ export function StudioPage() {
           placeholder: question.placeholder || "请输入答案关键词或简答内容",
           inputStyle: question.inputStyle || "essay",
           options: [],
-          answer: question.answer.length > 0 ? question.answer : [""]
+          answer: question.answer.length > 0 ? question.answer : [""],
         };
       }
 
@@ -616,8 +814,14 @@ export function StudioPage() {
         type,
         group: question.group,
         inputStyle: "short",
-        options: question.options.length > 0 ? question.options : createQuestion(type, index).options,
-        answer: type === "single" ? [question.answer[0] || "A"] : question.answer.filter(Boolean)
+        options:
+          question.options.length > 0
+            ? question.options
+            : createQuestion(type, index).options,
+        answer:
+          type === "single"
+            ? [question.answer[0] || "A"]
+            : question.answer.filter(Boolean),
       };
     });
   }
@@ -625,26 +829,47 @@ export function StudioPage() {
   function addOption(questionIndex: number) {
     updateQuestion(questionIndex, (question) => ({
       ...question,
-      options: [...question.options, { key: toOptionKey(question.options.length), text: "" }]
+      options: [
+        ...question.options,
+        { key: toOptionKey(question.options.length), text: "" },
+      ],
     }));
   }
 
-  function updateOption(questionIndex: number, optionIndex: number, field: "key" | "text", value: string) {
+  function updateOption(
+    questionIndex: number,
+    optionIndex: number,
+    field: "key" | "text",
+    value: string,
+  ) {
     updateQuestion(questionIndex, (question) => ({
       ...question,
-      options: question.options.map((option, currentIndex) => currentIndex === optionIndex ? { ...option, [field]: value } : option)
+      options: question.options.map((option, currentIndex) =>
+        currentIndex === optionIndex ? { ...option, [field]: value } : option,
+      ),
     }));
   }
 
   function removeOption(questionIndex: number, optionIndex: number) {
     updateQuestion(questionIndex, (question) => {
       const removedKey = question.options[optionIndex]?.key;
-      const nextOptions = question.options.filter((_, currentIndex) => currentIndex !== optionIndex);
+      const nextOptions = question.options.filter(
+        (_, currentIndex) => currentIndex !== optionIndex,
+      );
       const nextAnswer = question.answer.filter((item) => item !== removedKey);
       return {
         ...question,
-        options: nextOptions.length > 0 ? nextOptions : createQuestion(question.type === "text" ? "single" : question.type, questionIndex).options,
-        answer: question.type === "single" ? [nextAnswer[0] || nextOptions[0]?.key || "A"] : nextAnswer
+        options:
+          nextOptions.length > 0
+            ? nextOptions
+            : createQuestion(
+                question.type === "text" ? "single" : question.type,
+                questionIndex,
+              ).options,
+        answer:
+          question.type === "single"
+            ? [nextAnswer[0] || nextOptions[0]?.key || "A"]
+            : nextAnswer,
       };
     });
   }
@@ -659,58 +884,81 @@ export function StudioPage() {
         ...question,
         answer: question.answer.includes(optionKey)
           ? question.answer.filter((item) => item !== optionKey)
-          : [...question.answer, optionKey]
+          : [...question.answer, optionKey],
       };
     });
   }
 
-  function updateKeyword(questionIndex: number, keywordIndex: number, value: string) {
+  function updateKeyword(
+    questionIndex: number,
+    keywordIndex: number,
+    value: string,
+  ) {
     updateQuestion(questionIndex, (question) => ({
       ...question,
-      answer: question.answer.map((item, currentIndex) => currentIndex === keywordIndex ? value : item)
+      answer: question.answer.map((item, currentIndex) =>
+        currentIndex === keywordIndex ? value : item,
+      ),
     }));
   }
 
   function addKeyword(questionIndex: number) {
-    updateQuestion(questionIndex, (question) => ({ ...question, answer: [...question.answer, ""] }));
+    updateQuestion(questionIndex, (question) => ({
+      ...question,
+      answer: [...question.answer, ""],
+    }));
   }
 
   function removeKeyword(questionIndex: number, keywordIndex: number) {
     updateQuestion(questionIndex, (question) => {
-      const nextAnswer = question.answer.filter((_, currentIndex) => currentIndex !== keywordIndex);
+      const nextAnswer = question.answer.filter(
+        (_, currentIndex) => currentIndex !== keywordIndex,
+      );
       return { ...question, answer: nextAnswer.length > 0 ? nextAnswer : [""] };
     });
   }
 
-  function updateMedia(questionIndex: number, field: keyof EditorMedia, value: string) {
+  function updateMedia(
+    questionIndex: number,
+    field: keyof EditorMedia,
+    value: string,
+  ) {
     updateQuestion(questionIndex, (question) => ({
       ...question,
       media: {
         type: question.media?.type ?? "image",
         url: question.media?.url ?? "",
         caption: question.media?.caption ?? "",
-        [field]: value
-      } as EditorMedia
+        [field]: value,
+      } as EditorMedia,
     }));
   }
 
   function toggleMedia(questionIndex: number) {
     updateQuestion(questionIndex, (question) => ({
       ...question,
-      media: question.media ? undefined : { type: "image", url: "", caption: "" }
+      media: question.media
+        ? undefined
+        : { type: "image", url: "", caption: "" },
     }));
   }
 
   if (checkingAuth) {
     return (
-      <Frame eyebrow={settings.admin.eyebrow} title={settings.admin.title} subtitle={settings.admin.subtitle}>
+      <Frame
+        eyebrow={settings.admin.eyebrow}
+        title={settings.admin.title}
+        subtitle={settings.admin.subtitle}
+      >
         <section className="content-grid content-grid-single">
           <article className="card card-large polished-card">
             <div className="section-head">
               <StatusPill label="Session" />
               <h2>正在检查管理会话</h2>
             </div>
-            <p className="muted">工作台正在清理旧登录状态，并要求本次进入重新验证管理员密码。</p>
+            <p className="muted">
+              工作台正在清理旧登录状态，并要求本次进入重新验证管理员密码。
+            </p>
           </article>
         </section>
       </Frame>
@@ -759,15 +1007,25 @@ export function StudioPage() {
                   type="password"
                   name="password"
                   value={adminPasswordInput}
-                  onChange={(event) => setAdminPasswordInput(event.target.value)}
+                  onChange={(event) =>
+                    setAdminPasswordInput(event.target.value)
+                  }
                   placeholder="请填写 apps/api/.env 中当前启用的 ADMIN_PASSWORD"
                   autoComplete="current-password"
                 />
-                <small className="field-hint">每次重新进入工作台都会要求再次登录；浏览器仍然可以帮你记住这个密码输入框。</small>
+                <small className="field-hint">
+                  每次重新进入工作台都会要求再次登录；浏览器仍然可以帮你记住这个密码输入框。
+                </small>
               </label>
-              {feedback ? <p className={`admin-feedback is-${feedbackTone}`}>{feedback}</p> : null}
+              {feedback ? (
+                <p className={`admin-feedback is-${feedbackTone}`}>
+                  {feedback}
+                </p>
+              ) : null}
               <div className="button-row">
-                <button type="submit" className="primary-button">{settings.admin.loginButton}</button>
+                <button type="submit" className="primary-button">
+                  {settings.admin.loginButton}
+                </button>
               </div>
             </form>
           </article>
@@ -799,337 +1057,914 @@ export function StudioPage() {
       subtitle={settings.admin.subtitle}
       aside={
         <div className="hero-info-card hero-info-card-polished studio-aside-balance">
-          <span>{section === "quiz" ? getSelectionPreview(editor.meta, editor.questions.length) : settings.admin.siteSettingsTitle}</span>
-          <span>{section === "quiz" ? `${objectiveCount} 客观题 / ${subjectiveCount} 主观题` : settings.brand.name}</span>
-          <span>{section === "quiz" ? `${getExamModeLabel(editor.meta.examMode)} · ${editor.meta.requireFullscreen ? "要求全屏" : "常规模式"}` : settings.home.title}</span>
+          <span>
+            {section === "quiz"
+              ? getSelectionPreview(editor.meta, editor.questions.length)
+              : section === "site"
+                ? settings.admin.siteSettingsTitle
+                : "绑定记录"}
+          </span>
+          <span>
+            {section === "quiz"
+              ? `${objectiveCount} 客观题 / ${subjectiveCount} 主观题`
+              : section === "site"
+                ? settings.brand.name
+                : `${bindingItems.length} 条已绑定`}
+          </span>
+          <span>
+            {section === "quiz"
+              ? `${bindingItems.length} 条绑定 · ${editor.meta.requireFullscreen ? "要求全屏" : "常规模式"}`
+              : section === "site"
+                ? settings.home.title
+                : "头像缓存与绑定状态总览"}
+          </span>
         </div>
       }
     >
-      <section className={`content-grid studio-grid studio-grid-wide ${previewCollapsed ? "is-preview-collapsed" : ""}`}>
+      <section
+        className={`content-grid studio-grid studio-grid-wide ${previewCollapsed ? "is-preview-collapsed" : ""}`}
+      >
         <article className="card card-large polished-card">
           <div className="section-head">
             <StatusPill label="Workspace" />
-            <h2>{section === "quiz" ? "题库编辑与发布" : settings.admin.siteSettingsTitle}</h2>
+            <h2>
+              {section === "quiz"
+                ? "题库编辑与发布"
+                : section === "site"
+                  ? settings.admin.siteSettingsTitle
+                  : "绑定记录"}
+            </h2>
           </div>
 
           <div className="button-row admin-actions-row admin-actions-row-wide">
-            <button className={`tab-button ${section === "quiz" ? "is-active" : ""}`} onClick={() => setSection("quiz")}>题库编辑</button>
-            <button className={`tab-button ${section === "site" ? "is-active" : ""}`} onClick={() => setSection("site")}>{settings.admin.siteSettingsTitle}</button>
-            <button className="secondary-button" onClick={handleAdminLogout}>{settings.admin.logoutButton}</button>
+            <button
+              className={`tab-button ${section === "quiz" ? "is-active" : ""}`}
+              onClick={() => setSection("quiz")}
+            >
+              题库编辑
+            </button>
+            <button
+              className={`tab-button ${section === "site" ? "is-active" : ""}`}
+              onClick={() => setSection("site")}
+            >
+              {settings.admin.siteSettingsTitle}
+            </button>
+            <button
+              className={`tab-button ${section === "bindings" ? "is-active" : ""}`}
+              onClick={() => {
+                setSection("bindings");
+                void loadAdminBindings();
+              }}
+            >
+              绑定记录
+            </button>
+            <button className="secondary-button" onClick={handleAdminLogout}>
+              {settings.admin.logoutButton}
+            </button>
           </div>
 
           {section === "quiz" ? (
             <>
               <div className="button-row admin-actions-row admin-actions-row-wide">
-                <button className="secondary-button" onClick={loadSeedYaml}>读取当前题库</button>
-                <button className="secondary-button" onClick={loadAdminQuizzes}>刷新题集列表</button>
-                <button className="secondary-button" onClick={resetFromTemplate}>恢复模板</button>
+                <button className="secondary-button" onClick={loadSeedYaml}>
+                  读取当前题库
+                </button>
+                <button className="secondary-button" onClick={loadAdminQuizzes}>
+                  刷新题集列表
+                </button>
+                <button
+                  className="secondary-button"
+                  onClick={resetFromTemplate}
+                >
+                  恢复模板
+                </button>
               </div>
 
               <div className="editor-mode-tabs">
-                <button className={`tab-button ${mode === "visual" ? "is-active" : ""}`} onClick={() => setMode("visual")}>可视化出题</button>
-                <button className={`tab-button ${mode === "yaml" ? "is-active" : ""}`} onClick={() => setMode("yaml")}>YAML 高级模式</button>
+                <button
+                  className={`tab-button ${mode === "visual" ? "is-active" : ""}`}
+                  onClick={() => setMode("visual")}
+                >
+                  可视化出题
+                </button>
+                <button
+                  className={`tab-button ${mode === "yaml" ? "is-active" : ""}`}
+                  onClick={() => setMode("yaml")}
+                >
+                  YAML 高级模式
+                </button>
               </div>
 
               {mode === "visual" ? (
-            <div className="visual-editor-shell">
-              <section className="editor-section">
-                <div className="section-head">
-                  <StatusPill label="Quiz Meta" />
-                  <h2>题库信息</h2>
-                </div>
-                <div className="meta-grid editor-meta-grid-wide">
-                  <label className="field">
-                    <span>题库 slug</span>
-                    <input value={editor.meta.slug} onChange={(event) => updateMeta("slug", event.target.value)} />
-                  </label>
-                  <label className="field">
-                    <span>题库标题</span>
-                    <input value={editor.meta.title} onChange={(event) => updateMeta("title", event.target.value)} />
-                  </label>
-                  <label className="field">
-                    <span>副标题</span>
-                    <input value={editor.meta.subtitle} onChange={(event) => updateMeta("subtitle", event.target.value)} />
-                  </label>
-                  <label className="field">
-                    <span>题库描述</span>
-                    <input value={editor.meta.description} onChange={(event) => updateMeta("description", event.target.value)} />
-                  </label>
-                  <label className="field">
-                    <span>及格分</span>
-                    <input type="number" value={editor.meta.passScore} onChange={(event) => updateMeta("passScore", Number(event.target.value || 0))} />
-                  </label>
-                  <label className="field">
-                    <span>答题时长（秒）</span>
-                    <input type="number" value={editor.meta.durationSec} onChange={(event) => updateMeta("durationSec", Number(event.target.value || 0))} />
-                  </label>
-                  <label className="field">
-                    <span>考试模式</span>
-                    <select className="editor-select" value={editor.meta.examMode} onChange={(event) => updateMeta("examMode", event.target.value as ExamMode)}>
-                      <option value="closed_book">闭卷</option>
-                      <option value="open_book">开卷</option>
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>组卷方式</span>
-                    <select className="editor-select" value={editor.meta.selectionMode} onChange={(event) => updateMeta("selectionMode", event.target.value as SelectionMode)}>
-                      <option value="fixed">固定整卷</option>
-                      <option value="random">随机抽题</option>
-                    </select>
-                  </label>
-                  <label className="checkbox-row editor-toggle-row">
-                    <input type="checkbox" checked={editor.meta.shuffleQuestions} onChange={(event) => updateMeta("shuffleQuestions", event.target.checked)} />
-                    <span>开启题目乱序</span>
-                  </label>
-                  <label className="checkbox-row editor-toggle-row">
-                    <input type="checkbox" checked={editor.meta.requireFullscreen} onChange={(event) => updateMeta("requireFullscreen", event.target.checked)} />
-                    <span>要求全屏作答</span>
-                  </label>
-                </div>
+                <div className="visual-editor-shell">
+                  <section className="editor-section">
+                    <div className="section-head">
+                      <StatusPill label="Quiz Meta" />
+                      <h2>题库信息</h2>
+                    </div>
+                    <div className="meta-grid editor-meta-grid-wide">
+                      <label className="field">
+                        <span>题库 slug</span>
+                        <input
+                          value={editor.meta.slug}
+                          onChange={(event) =>
+                            updateMeta("slug", event.target.value)
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span>题库标题</span>
+                        <input
+                          value={editor.meta.title}
+                          onChange={(event) =>
+                            updateMeta("title", event.target.value)
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span>副标题</span>
+                        <input
+                          value={editor.meta.subtitle}
+                          onChange={(event) =>
+                            updateMeta("subtitle", event.target.value)
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span>题库描述</span>
+                        <input
+                          value={editor.meta.description}
+                          onChange={(event) =>
+                            updateMeta("description", event.target.value)
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span>及格分</span>
+                        <input
+                          type="number"
+                          value={editor.meta.passScore}
+                          onChange={(event) =>
+                            updateMeta(
+                              "passScore",
+                              Number(event.target.value || 0),
+                            )
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span>答题时长（秒）</span>
+                        <input
+                          type="number"
+                          value={editor.meta.durationSec}
+                          onChange={(event) =>
+                            updateMeta(
+                              "durationSec",
+                              Number(event.target.value || 0),
+                            )
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span>考试模式</span>
+                        <select
+                          className="editor-select"
+                          value={editor.meta.examMode}
+                          onChange={(event) =>
+                            updateMeta(
+                              "examMode",
+                              event.target.value as ExamMode,
+                            )
+                          }
+                        >
+                          <option value="closed_book">闭卷</option>
+                          <option value="open_book">开卷</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>组卷方式</span>
+                        <select
+                          className="editor-select"
+                          value={editor.meta.selectionMode}
+                          onChange={(event) =>
+                            updateMeta(
+                              "selectionMode",
+                              event.target.value as SelectionMode,
+                            )
+                          }
+                        >
+                          <option value="fixed">固定整卷</option>
+                          <option value="random">随机抽题</option>
+                        </select>
+                      </label>
+                      <label className="checkbox-row editor-toggle-row">
+                        <input
+                          type="checkbox"
+                          checked={editor.meta.shuffleQuestions}
+                          onChange={(event) =>
+                            updateMeta("shuffleQuestions", event.target.checked)
+                          }
+                        />
+                        <span>开启题目乱序</span>
+                      </label>
+                      <label className="checkbox-row editor-toggle-row">
+                        <input
+                          type="checkbox"
+                          checked={editor.meta.requireFullscreen}
+                          onChange={(event) =>
+                            updateMeta(
+                              "requireFullscreen",
+                              event.target.checked,
+                            )
+                          }
+                        />
+                        <span>要求全屏作答</span>
+                      </label>
+                    </div>
 
-                {editor.meta.selectionMode === "random" ? (
-                  <div className="meta-grid editor-meta-grid-wide">
-                    <label className="field">
-                      <span>总抽题数</span>
-                      <input type="number" value={editor.meta.drawCount ?? ""} onChange={(event) => updateMeta("drawCount", sanitizeOptionalCount(Number(event.target.value || 0)))} placeholder="留空则按题型抽题数汇总" />
-                    </label>
-                    <label className="field">
-                      <span>单选抽题数</span>
-                      <input type="number" value={editor.meta.drawSingleCount ?? ""} onChange={(event) => updateMeta("drawSingleCount", sanitizeOptionalCount(Number(event.target.value || 0)))} />
-                    </label>
-                    <label className="field">
-                      <span>多选抽题数</span>
-                      <input type="number" value={editor.meta.drawMultipleCount ?? ""} onChange={(event) => updateMeta("drawMultipleCount", sanitizeOptionalCount(Number(event.target.value || 0)))} />
-                    </label>
-                    <label className="field">
-                      <span>文本抽题数</span>
-                      <input type="number" value={editor.meta.drawTextCount ?? ""} onChange={(event) => updateMeta("drawTextCount", sanitizeOptionalCount(Number(event.target.value || 0)))} />
-                    </label>
-                  </div>
-                ) : null}
-              </section>
+                    {editor.meta.selectionMode === "random" ? (
+                      <div className="meta-grid editor-meta-grid-wide">
+                        <label className="field">
+                          <span>总抽题数</span>
+                          <input
+                            type="number"
+                            value={editor.meta.drawCount ?? ""}
+                            onChange={(event) =>
+                              updateMeta(
+                                "drawCount",
+                                sanitizeOptionalCount(
+                                  Number(event.target.value || 0),
+                                ),
+                              )
+                            }
+                            placeholder="留空则按题型抽题数汇总"
+                          />
+                        </label>
+                        <label className="field">
+                          <span>单选抽题数</span>
+                          <input
+                            type="number"
+                            value={editor.meta.drawSingleCount ?? ""}
+                            onChange={(event) =>
+                              updateMeta(
+                                "drawSingleCount",
+                                sanitizeOptionalCount(
+                                  Number(event.target.value || 0),
+                                ),
+                              )
+                            }
+                          />
+                        </label>
+                        <label className="field">
+                          <span>多选抽题数</span>
+                          <input
+                            type="number"
+                            value={editor.meta.drawMultipleCount ?? ""}
+                            onChange={(event) =>
+                              updateMeta(
+                                "drawMultipleCount",
+                                sanitizeOptionalCount(
+                                  Number(event.target.value || 0),
+                                ),
+                              )
+                            }
+                          />
+                        </label>
+                        <label className="field">
+                          <span>文本抽题数</span>
+                          <input
+                            type="number"
+                            value={editor.meta.drawTextCount ?? ""}
+                            onChange={(event) =>
+                              updateMeta(
+                                "drawTextCount",
+                                sanitizeOptionalCount(
+                                  Number(event.target.value || 0),
+                                ),
+                              )
+                            }
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+                  </section>
 
-              <section className="editor-section">
-                <div className="section-head">
-                  <StatusPill label="Question Bank" />
-                  <h2>题目编辑</h2>
-                </div>
-                <div className="hero-info-card compact editor-summary-strip editor-summary-strip-wide">
-                  <span>{editor.questions.length} 题</span>
-                  <span>总分 {totalPoints}</span>
-                  <span>{editor.meta.passScore} 分及格</span>
-                  <span>{getSelectionPreview(editor.meta, editor.questions.length)}</span>
-                </div>
+                  <section className="editor-section">
+                    <div className="section-head">
+                      <StatusPill label="Question Bank" />
+                      <h2>题目编辑</h2>
+                    </div>
+                    <div className="hero-info-card compact editor-summary-strip editor-summary-strip-wide">
+                      <span>{editor.questions.length} 题</span>
+                      <span>总分 {totalPoints}</span>
+                      <span>{editor.meta.passScore} 分及格</span>
+                      <span>
+                        {getSelectionPreview(
+                          editor.meta,
+                          editor.questions.length,
+                        )}
+                      </span>
+                    </div>
 
-                <div className="question-editor-list">
-                  {editor.questions.map((question, index) => (
-                    <section key={`${question.id}-${index}`} className="question-editor-card">
-                      <div className="question-editor-head">
-                        <div>
-                          <span className="question-index">{String(index + 1).padStart(2, "0")}</span>
-                        </div>
-                        <div className="question-editor-title">
-                          <h3>{question.prompt || `未命名题目 ${index + 1}`}</h3>
-                          <div className="editor-question-tags">
-                            <span className="editor-tag">{getGroupLabel(question.group)}</span>
-                            <span className="editor-tag">{getTypeLabel(question.type)}</span>
-                            <span className="editor-tag">{question.points} 分</span>
-                            {question.media?.url ? <span className="editor-tag">媒体题</span> : null}
+                    <div className="question-editor-list">
+                      {editor.questions.map((question, index) => (
+                        <section
+                          key={`${question.id}-${index}`}
+                          className="question-editor-card"
+                        >
+                          <div className="question-editor-head">
+                            <div>
+                              <span className="question-index">
+                                {String(index + 1).padStart(2, "0")}
+                              </span>
+                            </div>
+                            <div className="question-editor-title">
+                              <h3>
+                                {question.prompt || `未命名题目 ${index + 1}`}
+                              </h3>
+                              <div className="editor-question-tags">
+                                <span className="editor-tag">
+                                  {getGroupLabel(question.group)}
+                                </span>
+                                <span className="editor-tag">
+                                  {getTypeLabel(question.type)}
+                                </span>
+                                <span className="editor-tag">
+                                  {question.points} 分
+                                </span>
+                                {question.media?.url ? (
+                                  <span className="editor-tag">媒体题</span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="question-editor-actions">
+                              <button
+                                className="secondary-button"
+                                onClick={() => moveQuestion(index, -1)}
+                                disabled={index === 0}
+                              >
+                                上移
+                              </button>
+                              <button
+                                className="secondary-button"
+                                onClick={() => moveQuestion(index, 1)}
+                                disabled={index === editor.questions.length - 1}
+                              >
+                                下移
+                              </button>
+                              <button
+                                className="secondary-button"
+                                onClick={() => duplicateQuestion(index)}
+                              >
+                                复制
+                              </button>
+                              <button
+                                className="secondary-button danger-button"
+                                onClick={() => removeQuestion(index)}
+                              >
+                                删除
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                        <div className="question-editor-actions">
-                          <button className="secondary-button" onClick={() => moveQuestion(index, -1)} disabled={index === 0}>上移</button>
-                          <button className="secondary-button" onClick={() => moveQuestion(index, 1)} disabled={index === editor.questions.length - 1}>下移</button>
-                          <button className="secondary-button" onClick={() => duplicateQuestion(index)}>复制</button>
-                          <button className="secondary-button danger-button" onClick={() => removeQuestion(index)}>删除</button>
-                        </div>
-                      </div>
 
-                      <div className="meta-grid meta-grid-tight editor-question-grid">
-                        <label className="field">
-                          <span>题目 ID</span>
-                          <input value={question.id} onChange={(event) => updateQuestion(index, (current) => ({ ...current, id: event.target.value }))} />
-                        </label>
-                        <label className="field">
-                          <span>题型</span>
-                          <select className="editor-select" value={question.type} onChange={(event) => changeQuestionType(index, event.target.value as QuestionType)}>
-                            <option value="single">单选题</option>
-                            <option value="multiple">多选题</option>
-                            <option value="text">文本题</option>
-                          </select>
-                        </label>
-                        <label className="field">
-                          <span>作答分类</span>
-                          <select className="editor-select" value={question.group} onChange={(event) => updateQuestion(index, (current) => ({ ...current, group: event.target.value as QuestionGroup }))}>
-                            <option value="objective">客观题</option>
-                            <option value="subjective">主观题</option>
-                          </select>
-                        </label>
-                        <label className="field">
-                          <span>分值</span>
-                          <input type="number" value={question.points} onChange={(event) => updateQuestion(index, (current) => ({ ...current, points: Number(event.target.value || 0) }))} />
-                        </label>
-                      </div>
-
-                      <label className="field">
-                        <span>题目内容</span>
-                        <input value={question.prompt} onChange={(event) => updateQuestion(index, (current) => ({ ...current, prompt: event.target.value }))} />
-                      </label>
-                      <label className="field">
-                        <span>题目说明</span>
-                        <input value={question.description} onChange={(event) => updateQuestion(index, (current) => ({ ...current, description: event.target.value }))} placeholder="可以写题型提示、阅卷提示或作答限制" />
-                      </label>
-
-                      {question.type === "text" ? (
-                        <div className="meta-grid meta-grid-tight editor-question-grid">
-                          <label className="field">
-                            <span>输入提示</span>
-                            <input value={question.placeholder} onChange={(event) => updateQuestion(index, (current) => ({ ...current, placeholder: event.target.value }))} />
-                          </label>
-                          <label className="field">
-                            <span>作答样式</span>
-                            <select className="editor-select" value={question.inputStyle} onChange={(event) => updateQuestion(index, (current) => ({ ...current, inputStyle: event.target.value as TextInputStyle }))}>
-                              <option value="short">短答</option>
-                              <option value="essay">富文本长答</option>
-                            </select>
-                          </label>
-                        </div>
-                      ) : null}
-
-                      <div className="answer-editor-block">
-                        <div className="answer-editor-head">
-                          <strong>多媒体</strong>
-                          <button className={`secondary-button ${question.media ? "danger-button" : ""}`} onClick={() => toggleMedia(index)}>
-                            {question.media ? "移除媒体" : "添加媒体"}
-                          </button>
-                        </div>
-                        {question.media ? (
-                          <div className="meta-grid editor-media-grid">
+                          <div className="meta-grid meta-grid-tight editor-question-grid">
                             <label className="field">
-                              <span>媒体类型</span>
-                              <select className="editor-select" value={question.media.type} onChange={(event) => updateMedia(index, "type", event.target.value)}>
-                                <option value="image">图片</option>
-                                <option value="audio">音频</option>
-                                <option value="video">视频</option>
+                              <span>题目 ID</span>
+                              <input
+                                value={question.id}
+                                onChange={(event) =>
+                                  updateQuestion(index, (current) => ({
+                                    ...current,
+                                    id: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="field">
+                              <span>题型</span>
+                              <select
+                                className="editor-select"
+                                value={question.type}
+                                onChange={(event) =>
+                                  changeQuestionType(
+                                    index,
+                                    event.target.value as QuestionType,
+                                  )
+                                }
+                              >
+                                <option value="single">单选题</option>
+                                <option value="multiple">多选题</option>
+                                <option value="text">文本题</option>
                               </select>
                             </label>
                             <label className="field">
-                              <span>媒体地址</span>
-                              <input value={question.media.url} onChange={(event) => updateMedia(index, "url", event.target.value)} placeholder="支持 https://...、/media/xxx、./assets/xxx" />
+                              <span>作答分类</span>
+                              <select
+                                className="editor-select"
+                                value={question.group}
+                                onChange={(event) =>
+                                  updateQuestion(index, (current) => ({
+                                    ...current,
+                                    group: event.target.value as QuestionGroup,
+                                  }))
+                                }
+                              >
+                                <option value="objective">客观题</option>
+                                <option value="subjective">主观题</option>
+                              </select>
                             </label>
-                            <label className="field editor-media-span">
-                              <span>媒体说明</span>
-                              <input value={question.media.caption} onChange={(event) => updateMedia(index, "caption", event.target.value)} placeholder="可写题图说明、听力说明或视频提示" />
+                            <label className="field">
+                              <span>分值</span>
+                              <input
+                                type="number"
+                                value={question.points}
+                                onChange={(event) =>
+                                  updateQuestion(index, (current) => ({
+                                    ...current,
+                                    points: Number(event.target.value || 0),
+                                  }))
+                                }
+                              />
                             </label>
                           </div>
-                        ) : (
-                          <p className="muted">当前题目为纯文本。需要图、音频或视频时再开启即可；支持 http 地址和站内资源路径。</p>
-                        )}
-                      </div>
 
-                      {question.type === "text" ? (
-                        <div className="answer-editor-block">
-                          <div className="answer-editor-head">
-                            <strong>判定关键词 / 短语</strong>
-                            <button className="secondary-button" onClick={() => addKeyword(index)}>新增关键词</button>
-                          </div>
-                          <div className="keyword-list">
-                            {question.answer.map((item, keywordIndex) => (
-                              <div key={`${question.id}-kw-${keywordIndex}`} className="option-editor-row">
-                                <input className="editor-input-grow" value={item} onChange={(event) => updateKeyword(index, keywordIndex, event.target.value)} placeholder="例如 联系管理员" />
-                                <button className="secondary-button danger-button" onClick={() => removeKeyword(index, keywordIndex)}>删除</button>
+                          <label className="field">
+                            <span>题目内容</span>
+                            <input
+                              value={question.prompt}
+                              onChange={(event) =>
+                                updateQuestion(index, (current) => ({
+                                  ...current,
+                                  prompt: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label className="field">
+                            <span>题目说明</span>
+                            <input
+                              value={question.description}
+                              onChange={(event) =>
+                                updateQuestion(index, (current) => ({
+                                  ...current,
+                                  description: event.target.value,
+                                }))
+                              }
+                              placeholder="可以写题型提示、阅卷提示或作答限制"
+                            />
+                          </label>
+
+                          {question.type === "text" ? (
+                            <div className="meta-grid meta-grid-tight editor-question-grid">
+                              <label className="field">
+                                <span>输入提示</span>
+                                <input
+                                  value={question.placeholder}
+                                  onChange={(event) =>
+                                    updateQuestion(index, (current) => ({
+                                      ...current,
+                                      placeholder: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </label>
+                              <label className="field">
+                                <span>作答样式</span>
+                                <select
+                                  className="editor-select"
+                                  value={question.inputStyle}
+                                  onChange={(event) =>
+                                    updateQuestion(index, (current) => ({
+                                      ...current,
+                                      inputStyle: event.target
+                                        .value as TextInputStyle,
+                                    }))
+                                  }
+                                >
+                                  <option value="short">短答</option>
+                                  <option value="essay">富文本长答</option>
+                                </select>
+                              </label>
+                            </div>
+                          ) : null}
+
+                          <div className="answer-editor-block">
+                            <div className="answer-editor-head">
+                              <strong>多媒体</strong>
+                              <button
+                                className={`secondary-button ${question.media ? "danger-button" : ""}`}
+                                onClick={() => toggleMedia(index)}
+                              >
+                                {question.media ? "移除媒体" : "添加媒体"}
+                              </button>
+                            </div>
+                            {question.media ? (
+                              <div className="meta-grid editor-media-grid">
+                                <label className="field">
+                                  <span>媒体类型</span>
+                                  <select
+                                    className="editor-select"
+                                    value={question.media.type}
+                                    onChange={(event) =>
+                                      updateMedia(
+                                        index,
+                                        "type",
+                                        event.target.value,
+                                      )
+                                    }
+                                  >
+                                    <option value="image">图片</option>
+                                    <option value="audio">音频</option>
+                                    <option value="video">视频</option>
+                                  </select>
+                                </label>
+                                <label className="field">
+                                  <span>媒体地址</span>
+                                  <input
+                                    value={question.media.url}
+                                    onChange={(event) =>
+                                      updateMedia(
+                                        index,
+                                        "url",
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder="支持 https://...、/media/xxx、./assets/xxx"
+                                  />
+                                </label>
+                                <label className="field editor-media-span">
+                                  <span>媒体说明</span>
+                                  <input
+                                    value={question.media.caption}
+                                    onChange={(event) =>
+                                      updateMedia(
+                                        index,
+                                        "caption",
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder="可写题图说明、听力说明或视频提示"
+                                  />
+                                </label>
                               </div>
-                            ))}
+                            ) : (
+                              <p className="muted">
+                                当前题目为纯文本。需要图、音频或视频时再开启即可；支持
+                                http 地址和站内资源路径。
+                              </p>
+                            )}
                           </div>
-                        </div>
-                      ) : (
-                        <div className="answer-editor-block">
-                          <div className="answer-editor-head">
-                            <strong>选项与正确答案</strong>
-                            <button className="secondary-button" onClick={() => addOption(index)}>新增选项</button>
-                          </div>
-                          <div className="option-editor-list">
-                            {question.options.map((option, optionIndex) => {
-                              const selected = question.answer.includes(option.key);
-                              return (
-                                <div key={`${question.id}-option-${optionIndex}`} className="option-editor-row option-editor-row-rich">
-                                  <button className={`answer-pick ${selected ? "is-selected" : ""}`} onClick={() => toggleAnswer(index, option.key)} type="button">
-                                    {question.type === "single" ? (selected ? "单选答案" : "设为答案") : selected ? "已选中" : "选择"}
-                                  </button>
-                                  <input className="editor-option-key" value={option.key} onChange={(event) => updateOption(index, optionIndex, "key", event.target.value)} placeholder="A" />
-                                  <input className="editor-input-grow" value={option.text} onChange={(event) => updateOption(index, optionIndex, "text", event.target.value)} placeholder="填写选项内容" />
-                                  <button className="secondary-button danger-button" onClick={() => removeOption(index, optionIndex)}>删除</button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </section>
-                  ))}
-                </div>
 
-                <div className="studio-bottom-bar polished-card">
-                  <div className="question-add-row question-add-row-bottom question-add-row-bottom-wide">
-                    <button className="secondary-button" onClick={() => addQuestion("single")}>新增单选题</button>
-                    <button className="secondary-button" onClick={() => addQuestion("multiple")}>新增多选题</button>
-                    <button className="secondary-button" onClick={() => addQuestion("text")}>新增文本题</button>
-                    <button className="secondary-button" onClick={renumberQuestionIds}>一键重排题号</button>
-                    <button className="secondary-button" onClick={distributePointsToHundred}>按 100 分均分</button>
-                  </div>
+                          {question.type === "text" ? (
+                            <div className="answer-editor-block">
+                              <div className="answer-editor-head">
+                                <strong>判定关键词 / 短语</strong>
+                                <button
+                                  className="secondary-button"
+                                  onClick={() => addKeyword(index)}
+                                >
+                                  新增关键词
+                                </button>
+                              </div>
+                              <div className="keyword-list">
+                                {question.answer.map((item, keywordIndex) => (
+                                  <div
+                                    key={`${question.id}-kw-${keywordIndex}`}
+                                    className="option-editor-row"
+                                  >
+                                    <input
+                                      className="editor-input-grow"
+                                      value={item}
+                                      onChange={(event) =>
+                                        updateKeyword(
+                                          index,
+                                          keywordIndex,
+                                          event.target.value,
+                                        )
+                                      }
+                                      placeholder="例如 联系管理员"
+                                    />
+                                    <button
+                                      className="secondary-button danger-button"
+                                      onClick={() =>
+                                        removeKeyword(index, keywordIndex)
+                                      }
+                                    >
+                                      删除
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="answer-editor-block">
+                              <div className="answer-editor-head">
+                                <strong>选项与正确答案</strong>
+                                <button
+                                  className="secondary-button"
+                                  onClick={() => addOption(index)}
+                                >
+                                  新增选项
+                                </button>
+                              </div>
+                              <div className="option-editor-list">
+                                {question.options.map((option, optionIndex) => {
+                                  const selected = question.answer.includes(
+                                    option.key,
+                                  );
+                                  return (
+                                    <div
+                                      key={`${question.id}-option-${optionIndex}`}
+                                      className="option-editor-row option-editor-row-rich"
+                                    >
+                                      <button
+                                        className={`answer-pick ${selected ? "is-selected" : ""}`}
+                                        onClick={() =>
+                                          toggleAnswer(index, option.key)
+                                        }
+                                        type="button"
+                                      >
+                                        {question.type === "single"
+                                          ? selected
+                                            ? "单选答案"
+                                            : "设为答案"
+                                          : selected
+                                            ? "已选中"
+                                            : "选择"}
+                                      </button>
+                                      <input
+                                        className="editor-option-key"
+                                        value={option.key}
+                                        onChange={(event) =>
+                                          updateOption(
+                                            index,
+                                            optionIndex,
+                                            "key",
+                                            event.target.value,
+                                          )
+                                        }
+                                        placeholder="A"
+                                      />
+                                      <input
+                                        className="editor-input-grow"
+                                        value={option.text}
+                                        onChange={(event) =>
+                                          updateOption(
+                                            index,
+                                            optionIndex,
+                                            "text",
+                                            event.target.value,
+                                          )
+                                        }
+                                        placeholder="填写选项内容"
+                                      />
+                                      <button
+                                        className="secondary-button danger-button"
+                                        onClick={() =>
+                                          removeOption(index, optionIndex)
+                                        }
+                                      >
+                                        删除
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </section>
+                      ))}
+                    </div>
+
+                    <div className="studio-bottom-bar polished-card">
+                      <div className="question-add-row question-add-row-bottom question-add-row-bottom-wide">
+                        <button
+                          className="secondary-button"
+                          onClick={() => addQuestion("single")}
+                        >
+                          新增单选题
+                        </button>
+                        <button
+                          className="secondary-button"
+                          onClick={() => addQuestion("multiple")}
+                        >
+                          新增多选题
+                        </button>
+                        <button
+                          className="secondary-button"
+                          onClick={() => addQuestion("text")}
+                        >
+                          新增文本题
+                        </button>
+                        <button
+                          className="secondary-button"
+                          onClick={renumberQuestionIds}
+                        >
+                          一键重排题号
+                        </button>
+                        <button
+                          className="secondary-button"
+                          onClick={distributePointsToHundred}
+                        >
+                          按 100 分均分
+                        </button>
+                      </div>
+                    </div>
+                  </section>
                 </div>
-              </section>
-            </div>
-          ) : (
-            <div className="yaml-editor-shell">
-              <div className="button-row admin-actions-row admin-actions-row-wide">
-                <button className="secondary-button" onClick={syncYamlToVisual}>同步到可视化编辑器</button>
-              </div>
-              <label className="field">
-                <span>题库 YAML</span>
-                <textarea className="studio-editor" value={yamlText} onChange={(event) => setYamlText(event.target.value)} />
-              </label>
-              {previewResult.error ? <p className="error-text">{previewResult.error}</p> : null}
-            </div>
-          )}
+              ) : (
+                <div className="yaml-editor-shell">
+                  <div className="button-row admin-actions-row admin-actions-row-wide">
+                    <button
+                      className="secondary-button"
+                      onClick={syncYamlToVisual}
+                    >
+                      同步到可视化编辑器
+                    </button>
+                  </div>
+                  <label className="field">
+                    <span>题库 YAML</span>
+                    <textarea
+                      className="studio-editor"
+                      value={yamlText}
+                      onChange={(event) => setYamlText(event.target.value)}
+                    />
+                  </label>
+                  {previewResult.error ? (
+                    <p className="error-text">{previewResult.error}</p>
+                  ) : null}
+                </div>
+              )}
 
               <div className="note-box admin-note-box">
                 <strong>发布说明</strong>
-                <p>可视化模式会自动生成合法 YAML。发布时题库会先校验，再写回服务端文件并热更新到正式答题入口。</p>
+                <p>
+                  可视化模式会自动生成合法
+                  YAML。发布时题库会先校验，再写回服务端文件并热更新到正式答题入口。
+                </p>
               </div>
-              {feedback ? <p className={`admin-feedback is-${feedbackTone}`}>{feedback}</p> : null}
+              {feedback ? (
+                <p className={`admin-feedback is-${feedbackTone}`}>
+                  {feedback}
+                </p>
+              ) : null}
               <div className="button-row">
-                <button className="primary-button" onClick={publishQuiz}>发布题库</button>
+                <button className="primary-button" onClick={publishQuiz}>
+                  发布题库
+                </button>
               </div>
             </>
-          ) : (
+          ) : section === "site" ? (
             <>
               <div className="button-row admin-actions-row admin-actions-row-wide">
-                <button className="secondary-button" onClick={loadSiteYaml}>读取当前文案</button>
+                <button className="secondary-button" onClick={loadSiteYaml}>
+                  读取当前文案
+                </button>
               </div>
               <div className="yaml-editor-shell">
                 <label className="field">
                   <span>站点文案 YAML</span>
-                  <textarea className="studio-editor" value={siteYamlText} onChange={(event) => setSiteYamlText(event.target.value)} />
+                  <textarea
+                    className="studio-editor"
+                    value={siteYamlText}
+                    onChange={(event) => setSiteYamlText(event.target.value)}
+                  />
                 </label>
               </div>
               <div className="note-box admin-note-box">
                 <strong>{settings.admin.siteSettingsTitle}</strong>
                 <p>{settings.admin.siteSettingsNote}</p>
               </div>
-              {feedback ? <p className={`admin-feedback is-${feedbackTone}`}>{feedback}</p> : null}
+              {feedback ? (
+                <p className={`admin-feedback is-${feedbackTone}`}>
+                  {feedback}
+                </p>
+              ) : null}
               <div className="button-row">
-                <button className="primary-button" onClick={publishSiteSettings}>发布站点文案</button>
+                <button
+                  className="primary-button"
+                  onClick={publishSiteSettings}
+                >
+                  发布站点文案
+                </button>
               </div>
+            </>
+          ) : (
+            <>
+              <div className="button-row admin-actions-row admin-actions-row-wide">
+                <button
+                  className="secondary-button"
+                  onClick={loadAdminBindings}
+                >
+                  刷新绑定记录
+                </button>
+              </div>
+              <div className="note-box admin-note-box">
+                <strong>绑定记录说明</strong>
+                <p>
+                  这里会显示已经完成绑定并拿到验证码的身份卡片。头像优先读取服务端本地缓存，便于长期留档查看。
+                </p>
+                <p>
+                  新绑定会自动缓存头像；旧记录如果当时还没启用本地缓存，就会显示默认占位头像。
+                </p>
+                <p>
+                  如果你在后台手动删除某条绑定，这个身份会被解除占用，之后可以重新开始答题。
+                </p>
+              </div>
+              <div className="binding-record-grid">
+                {bindingItems.length === 0 ? (
+                  <div className="note-box studio-side-note">
+                    <strong>暂未读取绑定</strong>
+                    <p>
+                      点击上方“刷新绑定记录”后，这里会显示每个已绑定身份的卡片。
+                    </p>
+                  </div>
+                ) : null}
+                {bindingItems.map((item) => (
+                  <article
+                    key={item.attemptId}
+                    className="card polished-card binding-record-card"
+                  >
+                    <div className="binding-record-head">
+                      {item.hasAvatar ? (
+                        <img
+                          src={getBindingAvatarUrl(item)}
+                          alt={`${item.playerName} 的绑定头像`}
+                          className="binding-record-avatar"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="binding-record-avatar binding-record-avatar-fallback">
+                          {item.playerName.slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="binding-record-copy">
+                        <div className="binding-record-title-row">
+                          <h3>{item.playerName}</h3>
+                          <span className="editor-tag">
+                            {item.score ?? "--"} 分
+                          </span>
+                        </div>
+                        <p>{item.qqMask || "QQ 未记录"}</p>
+                        <p>{item.quizTitle}</p>
+                      </div>
+                    </div>
+                    <div className="hero-info-card compact binding-record-meta">
+                      <span>
+                        {getBindingStatusLabel(item.verificationStatus)}
+                      </span>
+                      <span>
+                        {new Date(item.submittedAt).toLocaleString("zh-CN")}
+                      </span>
+                      <span>
+                        {item.hasAvatar ? "头像已本地缓存" : "头像暂未缓存"}
+                      </span>
+                    </div>
+                    <div className="binding-record-actions">
+                      <button
+                        type="button"
+                        className="secondary-button danger-button"
+                        onClick={() => requestDeleteBinding(item)}
+                        disabled={deletingBindingId === item.attemptId}
+                      >
+                        {deletingBindingId === item.attemptId
+                          ? "删除中..."
+                          : "删除绑定"}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              {feedback ? (
+                <p className={`admin-feedback is-${feedbackTone}`}>
+                  {feedback}
+                </p>
+              ) : null}
             </>
           )}
         </article>
 
-        <article className={`card polished-card studio-side-panel ${previewCollapsed ? "is-collapsed" : ""}`}>
+        <article
+          className={`card polished-card studio-side-panel ${previewCollapsed ? "is-collapsed" : ""}`}
+        >
           <div className="section-head studio-side-head">
             <div className="studio-side-head-copy">
-              <StatusPill label={section === "quiz" ? "实时预览" : "Brand Preview"} />
-              <h2>{section === "quiz" ? (preview?.meta.title ?? editor.meta.title) : (sitePreviewResult.data?.brandName || settings.brand.name)}</h2>
+              <StatusPill
+                label={
+                  section === "quiz"
+                    ? "实时预览"
+                    : section === "site"
+                      ? "Brand Preview"
+                      : "Binding Board"
+                }
+              />
+              <h2>
+                {section === "quiz"
+                  ? (preview?.meta.title ?? editor.meta.title)
+                  : section === "site"
+                    ? sitePreviewResult.data?.brandName || settings.brand.name
+                    : "绑定总览"}
+              </h2>
             </div>
             <button
               type="button"
@@ -1144,29 +1979,66 @@ export function StudioPage() {
 
           {previewCollapsed ? (
             <div className="studio-side-collapsed">
-              <span>{section === "quiz" ? `${preview?.questions.length ?? editor.questions.length} 题` : (sitePreviewResult.data?.brandName || settings.brand.name)}</span>
-              <span>{section === "quiz" ? `${preview?.meta.passScore ?? editor.meta.passScore} 分线` : settings.admin.siteSettingsTitle}</span>
-              <span>{section === "quiz" ? `${quizItems.length} 份题集` : settings.brand.adminName}</span>
+              <span>
+                {section === "quiz"
+                  ? `${preview?.questions.length ?? editor.questions.length} 题`
+                  : section === "site"
+                    ? sitePreviewResult.data?.brandName || settings.brand.name
+                    : `${bindingItems.length} 条绑定`}
+              </span>
+              <span>
+                {section === "quiz"
+                  ? `${preview?.meta.passScore ?? editor.meta.passScore} 分线`
+                  : section === "site"
+                    ? settings.admin.siteSettingsTitle
+                    : `${latestBindings.filter((item) => item.hasAvatar).length} 张本地头像`}
+              </span>
+              <span>
+                {section === "quiz"
+                  ? `${quizItems.length} 份题集`
+                  : section === "site"
+                    ? settings.brand.adminName
+                    : "点击主面板查看全部"}
+              </span>
             </div>
           ) : (
             <>
-              {section === "quiz" && previewResult.error ? <p className="error-text">{previewResult.error}</p> : null}
-              {section === "site" && sitePreviewResult.error ? <p className="error-text">{sitePreviewResult.error}</p> : null}
+              {section === "quiz" && previewResult.error ? (
+                <p className="error-text">{previewResult.error}</p>
+              ) : null}
+              {section === "site" && sitePreviewResult.error ? (
+                <p className="error-text">{sitePreviewResult.error}</p>
+              ) : null}
               {section === "quiz" && preview ? (
                 <>
-                  <p className="muted">{preview.meta.description || "暂无描述"}</p>
+                  <p className="muted">
+                    {preview.meta.description || "暂无描述"}
+                  </p>
                   <div className="hero-info-card compact studio-side-stats studio-side-stats-rich">
                     <span>{preview.meta.passScore} 分及格</span>
-                    <span>{Math.round(preview.meta.durationSec / 60)} 分钟</span>
+                    <span>
+                      {Math.round(preview.meta.durationSec / 60)} 分钟
+                    </span>
                     <span>{getExamModeLabel(preview.meta.examMode)}</span>
-                    <span>{preview.meta.requireFullscreen ? "要求全屏" : "非全屏"}</span>
-                    <span>{getSelectionPreview(preview.meta, preview.questions.length)}</span>
+                    <span>
+                      {preview.meta.requireFullscreen ? "要求全屏" : "非全屏"}
+                    </span>
+                    <span>
+                      {getSelectionPreview(
+                        preview.meta,
+                        preview.questions.length,
+                      )}
+                    </span>
                     <span>{preview.questions.length} 题入库</span>
                   </div>
                   <div className="score-badges score-badges-rich studio-preview-badges">
                     {preview.questions.map((question, index) => (
-                      <span key={`${question.id}-${index}`} className="badge-preview">
-                        {question.id} · {getGroupLabel(question.group)} · {getTypeLabel(question.type)} · {question.points} 分
+                      <span
+                        key={`${question.id}-${index}`}
+                        className="badge-preview"
+                      >
+                        {question.id} · {getGroupLabel(question.group)} ·{" "}
+                        {getTypeLabel(question.type)} · {question.points} 分
                       </span>
                     ))}
                   </div>
@@ -1177,17 +2049,85 @@ export function StudioPage() {
                 <>
                   <p className="muted">{settings.admin.siteSettingsNote}</p>
                   <div className="hero-info-card compact studio-side-stats studio-side-stats-rich">
-                    <span>{sitePreviewResult.data.brandName || settings.brand.name}</span>
-                    <span>{sitePreviewResult.data.adminName || settings.brand.adminName}</span>
-                    <span>{sitePreviewResult.data.homeTitle || settings.home.title}</span>
-                    <span>{sitePreviewResult.data.entryTitle || settings.entry.fallbackTitle}</span>
+                    <span>
+                      {sitePreviewResult.data.brandName || settings.brand.name}
+                    </span>
+                    <span>
+                      {sitePreviewResult.data.adminName ||
+                        settings.brand.adminName}
+                    </span>
+                    <span>
+                      {sitePreviewResult.data.homeTitle || settings.home.title}
+                    </span>
+                    <span>
+                      {sitePreviewResult.data.entryTitle ||
+                        settings.entry.fallbackTitle}
+                    </span>
+                  </div>
+                </>
+              ) : null}
+
+              {section === "bindings" ? (
+                <>
+                  <p className="muted">
+                    这里会汇总最近的绑定身份与头像缓存状态，方便你快速查人和确认绑定归属。
+                  </p>
+                  <div className="hero-info-card compact studio-side-stats studio-side-stats-rich">
+                    <span>{bindingItems.length} 条绑定</span>
+                    <span>
+                      {
+                        bindingItems.filter(
+                          (item) => item.verificationStatus === "consumed",
+                        ).length
+                      }{" "}
+                      条已核销
+                    </span>
+                    <span>
+                      {bindingItems.filter((item) => item.hasAvatar).length}{" "}
+                      张本地头像
+                    </span>
+                    <span>
+                      {bindingItems.length > 0
+                        ? "最近记录已按时间倒序排列"
+                        : "暂无绑定数据"}
+                    </span>
+                  </div>
+                  <div className="stack-list studio-side-list">
+                    {latestBindings.map((item) => (
+                      <div key={item.attemptId} className="quiz-card static">
+                        <div>
+                          <h3>{item.playerName}</h3>
+                          <p>
+                            {item.qqMask || "QQ 未记录"} ·{" "}
+                            {getBindingStatusLabel(item.verificationStatus)}
+                          </p>
+                        </div>
+                        <div className="quiz-meta">
+                          <span>
+                            {item.hasAvatar ? "已缓存头像" : "无头像缓存"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </>
               ) : null}
 
               <div className="note-box studio-side-note studio-side-note-accent">
-                <strong>{section === "quiz" ? "当前题库摘要" : settings.admin.siteSettingsTitle}</strong>
-                <p>{section === "quiz" ? "右侧会持续显示题量、抽题方式、主客观比例和强制全屏状态，长题库编辑时不容易失焦。" : settings.admin.siteSettingsNote}</p>
+                <strong>
+                  {section === "quiz"
+                    ? "当前题库摘要"
+                    : section === "site"
+                      ? settings.admin.siteSettingsTitle
+                      : "绑定记录说明"}
+                </strong>
+                <p>
+                  {section === "quiz"
+                    ? "右侧会持续显示题量、抽题方式、主客观比例和强制全屏状态，长题库编辑时不容易失焦。"
+                    : section === "site"
+                      ? settings.admin.siteSettingsNote
+                      : "绑定记录页会把已经完成绑定的身份独立列出，主面板可直接查看卡片与头像。"}{" "}
+                </p>
               </div>
 
               {section === "quiz" ? (
@@ -1210,7 +2150,11 @@ export function StudioPage() {
                           <p>{item.slug}</p>
                         </div>
                         <div className="quiz-meta">
-                          <span>{item.updatedAt ? new Date(item.updatedAt).toLocaleString("zh-CN") : "未同步"}</span>
+                          <span>
+                            {item.updatedAt
+                              ? new Date(item.updatedAt).toLocaleString("zh-CN")
+                              : "未同步"}
+                          </span>
                         </div>
                       </div>
                     ))}
@@ -1221,9 +2165,59 @@ export function StudioPage() {
           )}
         </article>
       </section>
+      {pendingDeleteBinding ? (
+        <div className="studio-floating-confirm-shell" role="presentation">
+          <article
+            className="card polished-card security-overlay-card-compact studio-confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="binding-delete-title"
+          >
+            <div className="section-head">
+              <StatusPill label="Danger Zone" />
+              <h2 id="binding-delete-title">确认删除这条绑定记录</h2>
+            </div>
+            <p>
+              删除后，<strong>{pendingDeleteBinding.playerName}</strong>{" "}
+              这条绑定会从后台移除，对应头像缓存也会一起清掉。
+            </p>
+            <div className="hero-info-card compact studio-confirm-meta">
+              <span>{pendingDeleteBinding.qqMask || "QQ 未记录"}</span>
+              <span>{pendingDeleteBinding.quizTitle}</span>
+              <span>
+                {new Date(pendingDeleteBinding.submittedAt).toLocaleString(
+                  "zh-CN",
+                )}
+              </span>
+            </div>
+            <div className="note-box studio-confirm-note">
+              <strong>删除影响</strong>
+              <p>
+                这个 QQ /
+                玩家名会恢复成可重新开始答题的状态。只有确认这条记录确实要作废时再删除。
+              </p>
+            </div>
+            <div className="security-overlay-actions studio-confirm-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={closeDeleteBindingPrompt}
+                disabled={Boolean(deletingBindingId)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="secondary-button danger-button"
+                onClick={() => void confirmDeleteBinding()}
+                disabled={Boolean(deletingBindingId)}
+              >
+                {deletingBindingId ? "删除中..." : "确认删除绑定"}
+              </button>
+            </div>
+          </article>
+        </div>
+      ) : null}
     </Frame>
   );
 }
-
-
-

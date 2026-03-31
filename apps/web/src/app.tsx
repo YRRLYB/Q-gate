@@ -10,7 +10,10 @@ export function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/quiz/:slug" element={<QuizEntryPage />} />
-      <Route path="/quiz/:slug/session/:attemptId" element={<QuizSessionPage />} />
+      <Route
+        path="/quiz/:slug/session/:attemptId"
+        element={<QuizSessionPage />}
+      />
       <Route path="/quiz/:slug/result/:attemptId" element={<ResultPage />} />
       <Route path="/admin" element={<StudioPage />} />
     </Routes>

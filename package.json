@@ -1,7 +1,7 @@
 {
   "name": "q-gate",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.1.0",
   "workspaces": [
     "apps/api",
     "apps/web"
@@ -15,4 +15,3 @@
     "build": "npm run build --workspace apps/api && npm run build --workspace apps/web"
   }
 }
-

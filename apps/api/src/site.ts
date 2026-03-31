@@ -5,22 +5,28 @@ import { config } from "./config.js";
 
 const textPairSchema = z.object({
   title: z.string().min(1).max(80),
-  body: z.string().min(1).max(240)
+  body: z.string().min(1).max(240),
 });
 
 const mediaUrlSchema = z.string().min(1).max(1000);
+const defaultBoundNotice = {
+  title: "该身份已经绑定过",
+  body: "这个 QQ 或 Minecraft 用户名 已经完成过绑定，不能再次答题。",
+} as const;
+const defaultBoundContact = "如果绑定信息有误，请联系审核管理员处理。";
 
 export const siteSettingsSchema = z.object({
   brand: z.object({
     name: z.string().min(1).max(40),
+    releaseVersion: z.string().min(1).max(20),
     systemText: z.string().min(1).max(80),
     adminName: z.string().min(1).max(60),
-    repoUrl: z.string().min(1).max(1000)
+    repoUrl: z.string().min(1).max(1000),
   }),
   media: z.object({
     homeHeroImage: mediaUrlSchema,
     homeInsetImage: mediaUrlSchema,
-    entryHeroImage: mediaUrlSchema
+    entryHeroImage: mediaUrlSchema,
   }),
   home: z.object({
     eyebrow: z.string().min(1).max(40),
@@ -31,7 +37,7 @@ export const siteSettingsSchema = z.object({
     entryCardHint: z.string().min(1).max(80),
     flowSteps: z.array(z.string().min(1).max(40)).length(3),
     highlights: z.array(textPairSchema).length(2),
-    metrics: z.array(z.string().min(1).max(80)).length(3)
+    metrics: z.array(z.string().min(1).max(80)).length(3),
   }),
   entry: z.object({
     eyebrow: z.string().min(1).max(40),
@@ -44,8 +50,10 @@ export const siteSettingsSchema = z.object({
     flowSteps: z.array(z.string().min(1).max(40)).length(3),
     warning: textPairSchema,
     bindingNote: textPairSchema,
+    boundNotice: textPairSchema.default(defaultBoundNotice),
+    boundContact: z.string().min(1).max(200).default(defaultBoundContact),
     confirmAvatar: z.string().min(1).max(200),
-    confirmPrivacy: z.string().min(1).max(220)
+    confirmPrivacy: z.string().min(1).max(220),
   }),
   session: z.object({
     eyebrow: z.string().min(1).max(40),
@@ -60,7 +68,7 @@ export const siteSettingsSchema = z.object({
     fullscreenTitle: z.string().min(1).max(80),
     fullscreenBody: z.string().min(1).max(220),
     fullscreenButton: z.string().min(1).max(40),
-    resumeButton: z.string().min(1).max(40)
+    resumeButton: z.string().min(1).max(40),
   }),
   result: z.object({
     eyebrow: z.string().min(1).max(40),
@@ -74,7 +82,7 @@ export const siteSettingsSchema = z.object({
     retryButton: z.string().min(1).max(40),
     reviewTitle: z.string().min(1).max(40),
     noWrongTitle: z.string().min(1).max(40),
-    noWrongBody: z.string().min(1).max(200)
+    noWrongBody: z.string().min(1).max(200),
   }),
   admin: z.object({
     eyebrow: z.string().min(1).max(40),
@@ -85,8 +93,8 @@ export const siteSettingsSchema = z.object({
     loginButton: z.string().min(1).max(40),
     logoutButton: z.string().min(1).max(40),
     siteSettingsTitle: z.string().min(1).max(40),
-    siteSettingsNote: z.string().min(1).max(200)
-  })
+    siteSettingsNote: z.string().min(1).max(200),
+  }),
 });
 
 export type SiteSettings = z.infer<typeof siteSettingsSchema>;
@@ -127,12 +135,10 @@ export function readSiteSettingsYaml() {
   return readFileSync(config.siteSettingsFile, "utf8");
 }
 
-export function watchSiteSettingsFile(
-  handlers?: {
-    onReload?: () => void;
-    onError?: (error: Error) => void;
-  }
-) {
+export function watchSiteSettingsFile(handlers?: {
+  onReload?: () => void;
+  onError?: (error: Error) => void;
+}) {
   if (!existsSync(config.siteSettingsFile)) {
     return;
   }
@@ -142,7 +148,11 @@ export function watchSiteSettingsFile(
       syncSiteSettingsFromFile();
       handlers?.onReload?.();
     } catch (error) {
-      handlers?.onError?.(error instanceof Error ? error : new Error("site_settings_reload_failed"));
+      handlers?.onError?.(
+        error instanceof Error
+          ? error
+          : new Error("site_settings_reload_failed"),
+      );
     }
   });
 }
