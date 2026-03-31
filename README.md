@@ -168,12 +168,18 @@ ATTEMPT_MAX_PER_WINDOW=5
 ATTEMPT_WINDOW_HOURS=24
 ```
 
+注意：
+
+- `ADMIN_PASSWORD` 至少需要 `8` 位字符。
+- `TOKEN_SECRET` 至少需要 `24` 位字符，建议直接使用长随机串。
+- 这两个值长度不够时，API 会在启动阶段直接报错并拒绝运行。
+
 字段说明：
 
 - `PORT`：API 服务端口。
 - `APP_ORIGIN`：允许访问 API 的前端来源，多个地址用逗号分隔。
-- `ADMIN_PASSWORD`：管理端登录密码。
-- `TOKEN_SECRET`：验证码和会话签名用的密钥，部署时建议换成长随机串。
+- `ADMIN_PASSWORD`：管理端登录密码，至少 `8` 位。
+- `TOKEN_SECRET`：验证码和会话签名用的密钥，至少 `24` 位，部署时建议换成长随机串。
 - `DATA_DIR`：运行时数据目录，SQLite 会落在这里。
 - `QUIZ_SEED_FILE`：题库 YAML 文件路径。
 - `SITE_SETTINGS_FILE`：站点配置 YAML 文件路径。
